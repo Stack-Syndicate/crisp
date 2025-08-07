@@ -1,0 +1,14 @@
+[package]
+name = "stochos"
+authors = ["Glenn Wallace glennw-coding@proton.me"]
+description = "A library for building fast, composable simulations and experiments grounded in stochastic processes, probabilistic models, and algorithmic randomness."
+version = "0.0.1"
+edition = "2024"
+keywords = ["stochastic", "statistics", "simulation", "randomness", "agents"]
+categories = ["science", "concurrency", "algorithms", "mathematics"]
+license = "MIT"
+license-file = "LICENSE"
+repository = "https://github.com/Stack-Syndicate/stochos"
+
+[dependencies]
+
