@@ -1,14 +1,14 @@
 [package]
-name = "stochos"
+name = "crisp"
 authors = ["Glenn Wallace glennw-coding@proton.me"]
-description = "A library for building fast, composable simulations and experiments grounded in stochastic processes, probabilistic models, and algorithmic randomness."
+description = "Placeholder for Rusty Lisp."
 version = "0.0.1"
 edition = "2024"
-keywords = ["stochastic", "statistics", "simulation", "randomness", "agents"]
-categories = ["science", "concurrency", "algorithms", "mathematics"]
+keywords = ["lisp", "repl", "programming-language", "crisp"]
+categories = ["parser-implementations", "compilers"]
 license = "MIT"
 license-file = "LICENSE"
-repository = "https://github.com/Stack-Syndicate/stochos"
+repository = "https://github.com/Stack-Syndicate/crisp"
 
 [dependencies]
 
