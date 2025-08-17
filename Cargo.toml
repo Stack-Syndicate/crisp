@@ -1,8 +1,8 @@
 [package]
 name = "crisp"
 authors = ["Glenn Wallace glennw-coding@proton.me"]
-description = "A lisp-like programming language which integrates seamlessly with C/C++ and Rust libraries."
-version = "0.0.1"
+description = "A lisp-like programming language which (one day!) integrates seamlessly with C/C++ and Rust libraries."
+version = "0.0.2"
 edition = "2024"
 keywords = ["lisp", "repl", "programming-language", "crisp"]
 categories = ["parser-implementations", "compilers"]
