@@ -47,9 +47,8 @@ fn parse_crisp(pairs: Pairs<'_, Rule>) -> TokenStream2 {
                         }
                     }
                     Rule::fn_ident => {
-                        let fn_name =
-                            syn::Ident::new(ident.as_str(), proc_macro2::Span::call_site());
-                        quote! { #fn_name(#(#args),*) }
+                        let fn_ident = syn::parse_str::<syn::Ident>(ident.as_str()).unwrap();
+                        quote! { #fn_ident(#(#args),*) }
                     }
                     _ => panic!("Unexpected identifier {:?}", ident.as_rule()),
                 };
