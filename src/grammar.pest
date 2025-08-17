@@ -1,0 +1,21 @@
+program = { SOI ~ s_expr* ~ EOI }
+
+s_expr = { "(" ~ ident ~ arg+ ~ ")" }
+
+ident    = { fn_ident | op_ident }
+fn_ident = { ASCII_ALPHA ~ ASCII_ALPHANUMERIC+ }
+op_ident = { add | sub | mul | div }
+add      = @{ "+" }
+sub      = @{ "-" }
+mul      = @{ "*" }
+div      = @{ "/" }
+
+arg = { s_expr | literal }
+
+literal =  { float | integer | string | bool }
+float   = @{ (add | sub)? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+integer = @{ (add | sub)? ~ ASCII_DIGIT+ }
+string  = @{ "\"" ~ (!("\"") ~ ANY)* ~ "\"" }
+bool    = @{ "true" | "false" }
+
+WHITESPACE = _{ " " | "\t" | "\n" }

@@ -1,7 +1,7 @@
 [package]
 name = "crisp"
 authors = ["Glenn Wallace glennw-coding@proton.me"]
-description = "Placeholder for Rusty Lisp."
+description = "A lisp-like programming language which integrates seamlessly with C/C++ and Rust libraries."
 version = "0.0.1"
 edition = "2024"
 keywords = ["lisp", "repl", "programming-language", "crisp"]
@@ -11,4 +11,11 @@ license-file = "LICENSE"
 repository = "https://github.com/Stack-Syndicate/crisp"
 
 [dependencies]
+pest = "2.8.1"
+pest_derive = "2.8.1"
+proc-macro2 = "1.0.101"
+quote = "1.0.40"
+syn = { version = "2.0.106", features = ["full"] }
 
+[lib]
+proc-macro = true
