@@ -1,21 +1,28 @@
-program = { SOI ~ s_expr* ~ EOI }
+program = { SOI ~ s_expression* ~ EOI }
 
-s_expr = { "(" ~ ident ~ arg+ ~ ")" }
+s_expression = { special_form | list | atom }
 
-ident    = { fn_ident | op_ident }
-fn_ident = { ASCII_ALPHA ~ ASCII_ALPHANUMERIC+ }
-op_ident = { add | sub | mul | div }
-add      = @{ "+" }
-sub      = @{ "-" }
-mul      = @{ "*" }
-div      = @{ "/" }
+special_form = { fun | def | ifb | opvar }
 
-arg = { s_expr | literal }
+fun   = { "(" ~ "fn" ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")" }
+def   = { "(" ~ "let" ~ symbol ~ s_expression ~ ")" }
+ifb   = { "(" ~ "if" ~ s_expression ~ s_expression ~ s_expression ~ ")" }
+opvar = { "(" ~ operator ~ s_expression ~ s_expression+ ~ ")" }
+list  = { "(" ~ s_expression* ~ ")" }
+atom  = { number | symbol | string | boolean | comment }
 
-literal =  { float | integer | string | bool }
-float   = @{ (add | sub)? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
-integer = @{ (add | sub)? ~ ASCII_DIGIT+ }
-string  = @{ "\"" ~ (!("\"") ~ ANY)* ~ "\"" }
-bool    = @{ "true" | "false" }
+number      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "."* ~ ASCII_DIGIT* }
+symbol      =  @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+operator    =  { add | sub | mul | div | less | more }
+add         = @{ "+" }
+sub         = @{ "-" }
+mul         = @{ "*" }
+div         = @{ "/" }
+less        = @{ "<" }
+more        = @{ ">" }
+string      =  { "\"" ~ (string_char)* ~ "\"" }
+string_char =  { ("\\\"" | "\\\\" | !("\"" | "\\") ~ ANY) }
+comment     = @{ "//" ~ (!"\n" ~ ANY)* }
+boolean     =  { "true" | "false" }
 
 WHITESPACE = _{ " " | "\t" | "\n" }

@@ -1,7 +1,15 @@
-use pest::{Parser, iterators::Pairs};
+use pest::{iterators::{Pair, Pairs}, Parser};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+
+enum Value {
+    String(String),
+    Number(f32),
+    Bool(bool),
+    List(Vec<Value>),
+    Function(Box<dyn Fn(&[Value]) -> Value>)
+}
 
 mod parsing {
     use pest_derive::Parser;
@@ -16,56 +24,87 @@ use parsing::*;
 pub fn crisp(input: TokenStream) -> TokenStream {
     let ts_str = input.to_string();
     let parsed_ts = CrispParser::parse(Rule::program, &ts_str).expect("Parsing failed.");
-    let parsed_crisp = parse_crisp(parsed_ts);
-    TokenStream::from(quote! { #parsed_crisp })
+    let parsed_crisp = transpile(parsed_ts);
+    TokenStream::from(quote! { 
+        #parsed_crisp 
+    })
 }
 
-fn parse_crisp(pairs: Pairs<'_, Rule>) -> TokenStream2 {
-    let mut result_ts = TokenStream2::new();
+fn transpile(pairs: Pairs<'_, Rule>) -> TokenStream2 {
+    let mut result = TokenStream2::new();
     for pair in pairs {
         match pair.as_rule() {
-            Rule::program => {
-                let program = pair.into_inner();
-                result_ts.extend(parse_crisp(program));
+            Rule::fun => {
+                let mut inner = pair.into_inner();
+                let mut params = Vec::new();
+                
+                while inner.len() > 1 {
+                    let param = inner.next().unwrap();
+                    params.push(syn::parse_str::<syn::Ident>(param.as_str()).unwrap());
+                }
+                let body = transpile(inner.next().unwrap().into_inner());
+                result.extend(quote! {Box::new(|#(#params),*| { #body })});
             }
-            Rule::s_expr => {
-                let mut s_expr = pair.into_inner();
-                // Extract identifier
-                let ident = s_expr.next().unwrap().into_inner().next().unwrap();
-                // Extract arguments
-                let args: Vec<TokenStream2> =
-                    s_expr.map(|arg| parse_crisp(arg.into_inner())).collect();
-                let ts = match ident.as_rule() {
-                    Rule::op_ident => {
-                        let operator = ident.into_inner().next().unwrap();
-                        match operator.as_rule() {
-                            Rule::add => quote! { (#(#args)+*) },
-                            Rule::sub => quote! { (#(#args)-*) },
-                            Rule::mul => quote! { (#(#args)**) },
-                            Rule::div => quote! { (#(#args)/ *) },
-                            _ => unreachable!(),
-                        }
-                    }
-                    Rule::fn_ident => {
-                        let fn_ident = syn::parse_str::<syn::Ident>(ident.as_str()).unwrap();
-                        quote! { #fn_ident(#(#args),*) }
-                    }
-                    _ => panic!("Unexpected identifier {:?}", ident.as_rule()),
-                };
-                result_ts.extend(ts);
+            Rule::def => {
+                let mut inner = pair.into_inner();
+                println!("{:?}", inner);
+                let var_name = syn::parse_str::<syn::Ident>(inner.next().unwrap().as_str()).unwrap();
+                let var_def = transpile(inner.next().unwrap().into_inner());
+                result.extend(quote! {let #var_name = #var_def;});
             }
-            Rule::literal | Rule::integer | Rule::float | Rule::string | Rule::bool => {
-                let lit =
-                    syn::parse_str::<syn::Expr>(&pair.as_str()).expect("Failed to parse literal");
-                result_ts.extend(quote! { #lit });
+            Rule::ifb => {
+                let mut inner = pair.into_inner();
+                let cond = transpile(inner.next().unwrap().into_inner());
+                let if_true = transpile(inner.next().unwrap().into_inner());
+                let if_false =transpile(inner.next().unwrap().into_inner());
+                result.extend(quote! {if #cond {#if_true} else {#if_false}});
+            }
+            Rule::opvar => {
+                let mut inner = pair.into_inner();
+                let operator = transpile(inner.next().unwrap().into_inner());
+                let mut operands = Vec::new();
+                for pair in inner {
+                    operands.push(transpile(pair.into_inner()));
+                }
+                let first_operand = operands.first().unwrap();
+                result.extend(quote! {#first_operand});
+                for op in operands.iter().skip(1) {
+                    result.extend(quote! {#operator #op});
+                }
+            }
+            Rule::list => {
+                let inner = pair.into_inner();
+                let transpiled = transpile(inner);
+                result.extend(quote! {{#transpiled}});
+            }
+            Rule::symbol => {
+                let inner = syn::parse_str::<syn::Ident>(pair.as_str()).unwrap();
+                result.extend(quote! {#inner});
+            }
+            Rule::add => {
+                result.extend(quote! {+});
+            }
+            Rule::sub => {
+                result.extend(quote! {-});
+            }
+            Rule::mul => {
+                result.extend(quote! {*});
+            }
+            Rule::div => {
+                result.extend(quote! {/});
+            }
+            Rule::number => {
+                let inner = syn::parse_str::<syn::Lit>(pair.as_str()).unwrap();
+
+                result.extend(quote! {#inner});
             }
             Rule::EOI => {
-                break;
+                return result
             }
             _ => {
-                panic!("Parsing failed {}", pair)
+                let inner = pair.into_inner();
+                result.extend(transpile(inner));
             }
         }
-    }
-    return result_ts;
+    }    result
 }
