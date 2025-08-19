@@ -10,6 +10,6 @@ fn basic_arithmetic() {
 
 #[test]
 fn functions() {
-    let f = crisp!((fn [x y] (+ x y)));
+    crisp!((define f [x y] (+ x y)));
     println!("{}", f(1, 2));
 }

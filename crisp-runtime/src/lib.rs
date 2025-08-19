@@ -19,7 +19,6 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
             Rule::fun => {
                 let mut inner = pair.into_inner();
                 let mut params = Vec::new();
-                
                 while inner.len() > 1 {
                     let param = inner.next().unwrap();
                     params.push(syn::parse_str::<syn::Ident>(param.as_str()).unwrap());
@@ -29,10 +28,20 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
             }
             Rule::def => {
                 let mut inner = pair.into_inner();
-                println!("{:?}", inner);
                 let var_name = syn::parse_str::<syn::Ident>(inner.next().unwrap().as_str()).unwrap();
                 let var_def = transpile_to_rust(inner.next().unwrap().into_inner());
                 result.extend(quote! {let #var_name = #var_def;});
+            }
+            Rule::defn => {
+                let mut inner = pair.into_inner();
+                let var_name = syn::parse_str::<syn::Ident>(inner.next().unwrap().as_str()).unwrap();
+                let mut params = Vec::new();
+                while inner.len() > 1 {
+                    let param = inner.next().unwrap();
+                    params.push(syn::parse_str::<syn::Ident>(param.as_str()).unwrap());
+                }
+                let body = transpile_to_rust(inner.next().unwrap().into_inner());
+                result.extend(quote! {let #var_name = Box::new(|#(#params),*| { #body });});
             }
             Rule::ifb => {
                 let mut inner = pair.into_inner();

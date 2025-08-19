@@ -2,10 +2,11 @@ program = { SOI ~ s_expression* ~ EOI }
 
 s_expression = { special_form | list | atom }
 
-special_form = { fun | def | ifb | opvar }
+special_form = { fun | defn | def | ifb | opvar }
 
-fun   = { "(" ~ "fn" ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")" }
-def   = { "(" ~ "let" ~ symbol ~ s_expression ~ ")" }
+fun   = { "(" ~ "define" ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")" }
+def   = { "(" ~ "define" ~ symbol ~ s_expression ~ ")" }
+defn = { "(" ~ "define" ~ symbol ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")"}
 ifb   = { "(" ~ "if" ~ s_expression ~ s_expression ~ s_expression ~ ")" }
 opvar = { "(" ~ operator ~ s_expression ~ s_expression+ ~ ")" }
 list  = { "(" ~ s_expression* ~ ")" }
