@@ -8,6 +8,8 @@
 
 ## What is this?
 
-<img align="left" style="width:160px" src="crisp.png" width="288px">
+<img align="left" style="width:160px" src="../crisp.png" width="288px">
 
 **Crisp** - *C/C++ and Rust Interoperable S-expression Parsing* - is my exploration of lisp-like programming languages with the goal of eventually building a fun and hopefully useful tool for people who enjoy functional programming.
+
+**Crisp Runtime** is the crate which contains the transpiler and compiler, along with a REPL.

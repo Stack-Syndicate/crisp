@@ -30,6 +30,31 @@ dependencies = [
 name = "crisp"
 version = "0.0.3"
 dependencies = [
+ "crisp-macro",
+ "crisp-runtime",
+ "pest",
+ "pest_derive",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "crisp-macro"
+version = "0.0.1"
+dependencies = [
+ "crisp-runtime",
+ "pest",
+ "pest_derive",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "crisp-runtime"
+version = "0.0.1"
+dependencies = [
  "pest",
  "pest_derive",
  "proc-macro2",
