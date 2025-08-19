@@ -9,7 +9,7 @@ pub fn crisp(input: TokenStream) -> TokenStream {
     let ts_str = input.to_string();
     let parsed_ts = CrispParser::parse(Rule::program, &ts_str).expect("Parsing failed.");
     let parsed_crisp = transpile_to_rust(parsed_ts);
-    TokenStream::from(quote! { 
+    TokenStream::from(quote! {
         #parsed_crisp 
     })
 }

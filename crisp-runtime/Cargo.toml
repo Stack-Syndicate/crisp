@@ -7,7 +7,6 @@ edition = "2024"
 keywords = ["lisp", "repl", "programming-language", "crisp"]
 categories = ["parser-implementations", "compilers"]
 license = "MIT"
-license-file = "LICENSE"
 repository = "https://github.com/Stack-Syndicate/crisp"
 
 [dependencies]

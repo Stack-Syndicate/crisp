@@ -1,4 +1,4 @@
-use crisp_macro::crisp;
+use crisp::*;
 
 #[test]
 fn basic_arithmetic() {
@@ -10,6 +10,8 @@ fn basic_arithmetic() {
 
 #[test]
 fn functions() {
-    crisp!((define f [x y] (+ x y)));
-    println!("{}", f(1, 2));
+    crisp!((define [x y] (+ x y)));
+    crisp!((define f1 [x Number y Number] (+ x y)));
+    crisp!((define f2 [x Number y] (+ x y)));
+    crisp!((define f3 [x y] (+ x y)));
 }

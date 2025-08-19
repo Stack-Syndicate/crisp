@@ -2,18 +2,28 @@ program = { SOI ~ s_expression* ~ EOI }
 
 s_expression = { special_form | list | atom }
 
-special_form = { fun | defn | def | ifb | opvar }
+special_form = { tfun | tdef | tdefn | fun | defn | def | ifb | opvar }
 
-fun   = { "(" ~ "define" ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")" }
-def   = { "(" ~ "define" ~ symbol ~ s_expression ~ ")" }
-defn = { "(" ~ "define" ~ symbol ~ "[" ~ symbol* ~ "]" ~ s_expression ~ ")"}
+fun   = { "(" ~ "define" ~ "[" ~ (symbol_type | symbol)* ~ "]" ~ s_expression ~ ")" }
+def   = { "(" ~ "define" ~ (symbol_type | symbol) ~ s_expression ~ ")" }
+defn  = { "(" ~ "define" ~ symbol ~ "[" ~ (symbol_type | symbol)* ~ "]" ~ s_expression ~ ")" }
+tfun  = { "(" ~ "define" ~ "[" ~ symbol_type* ~ "]" ~ s_expression ~ ")" }
+tdef  = { "(" ~ "define" ~ symbol_type ~ s_expression ~ ")" }
+tdefn = { "(" ~ "define" ~ symbol ~ "[" ~ symbol_type* ~ "]" ~ s_expression ~ ")" }
 ifb   = { "(" ~ "if" ~ s_expression ~ s_expression ~ s_expression ~ ")" }
 opvar = { "(" ~ operator ~ s_expression ~ s_expression+ ~ ")" }
 list  = { "(" ~ s_expression* ~ ")" }
 atom  = { number | symbol | string | boolean | comment }
 
+symbol_type =  { symbol ~ type }
 number      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "."* ~ ASCII_DIGIT* }
-symbol      =  @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+symbol      = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+type        =  { TSTR | TNUM | TBOOL | TLIST | TFUN }
+TSTR        = @{ "String" }
+TNUM        = @{ "Number" }
+TBOOL       = @{ "Boolean" }
+TLIST       = @{ "List" }
+TFUN        = @{ "Function" }
 operator    =  { add | sub | mul | div | less | more }
 add         = @{ "+" }
 sub         = @{ "-" }
