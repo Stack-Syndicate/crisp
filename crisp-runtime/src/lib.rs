@@ -1,5 +1,5 @@
 pub mod parsing;
-use std::{ops::Add, sync::Arc};
+use std::{fmt::Debug, ops::{Add, Div, Mul, Sub}, sync::Arc};
 use parsing::*;
 use pest::iterators::{Pair, Pairs};
 use proc_macro2::TokenStream;
@@ -50,6 +50,41 @@ impl Value {
         }
     }
 }
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::String(s1), Value::String(s2)) => s1 == s2,
+            (Value::Number(n1), Value::Number(n2)) => n1 == n2,
+            (Value::Bool(b1), Value::Bool(b2)) => b1 == b2,
+            (Value::List(l1), Value::List(l2)) => l1 == l2,
+            (Value::Function(_), Value::Function(_)) => true,
+            _ => panic!("Cannot compare functions."),
+        }
+    }
+}
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Value::String(s1), Value::String(s2)) => s1.partial_cmp(s2),
+            (Value::Number(n1), Value::Number(n2)) => n1.partial_cmp(n2),
+            (Value::Bool(b1), Value::Bool(b2)) => b1.partial_cmp(b2),
+            (Value::List(_), Value::List(_)) => panic!("Cannot compare lists."),
+            (Value::Function(_), Value::Function(_)) => panic!("Cannot compare functions."),
+            _ => panic!("Cannot compare these types."),
+        }
+    }
+}
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::String(s) => write!(f, "{}", s),
+            Value::Number(n) => write!(f, "{}", n),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::List(l) => write!(f, "{:?}", l),
+            Value::Function(_) => panic!("Cannot debug print functions."),
+        }
+    }
+}
 impl From<Value> for String {
     fn from(value: Value) -> Self {
         return value.as_string().unwrap();
@@ -68,6 +103,21 @@ impl From<f32> for Value {
 impl From<String> for Value {
     fn from(value: String) -> Self {
         return Value::String(value);
+    }
+}
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        return Value::Number(value as f32);
+    }
+}
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        return Value::Bool(value);
+    }
+}
+impl From<Value> for bool {
+    fn from(value: Value) -> Self {
+        return value.as_bool().unwrap();
     }
 }
 impl Add<f32> for Value {
@@ -122,6 +172,39 @@ impl Add<Value> for Value {
             Value::String(s) => Value::String(s + other.as_string().unwrap().as_str()),
             _ => {
                 panic!("Cannot add these types")
+            }
+        }
+    }
+}
+impl Sub<Value> for Value {
+    type Output = Value;
+    fn sub(self, other: Value) -> Self::Output {
+        match self {
+            Value::Number(s) => Value::Number(s - other.as_number().unwrap()),
+            _ => {
+                panic!("Cannot subtract these types")
+            }
+        }
+    }
+}
+impl Mul<Value> for Value {
+    type Output = Value;
+    fn mul(self, other: Value) -> Self::Output {        
+        match self {
+            Value::Number(s) => Value::Number(s * other.as_number().unwrap()),
+            _ => {
+                panic!("Cannot multiply these types")
+            }
+        }
+    }
+}
+impl Div<Value> for Value {
+    type Output = Value;
+    fn div(self, other: Value) -> Self::Output {
+        match self {
+            Value::Number(s) => Value::Number(s / other.as_number().unwrap()),
+            _ => {
+                panic!("Cannot divide these types")
             }
         }
     }
@@ -269,9 +352,22 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
             Rule::div => {
                 result.extend(quote! {/});
             }
+            Rule::less => {
+                result.extend(quote! {<});
+            }
+            Rule::more => {
+                result.extend(quote! {>});
+            }
+            Rule::equal => {
+                result.extend(quote! {==});
+            }
             Rule::number => {
                 let inner = syn::parse_str::<syn::Lit>(pair.as_str()).unwrap();
-                result.extend(quote! {#inner});
+                result.extend(quote! {Value::from(#inner)});
+            }
+            Rule::boolean => {
+                let inner = syn::parse_str::<syn::LitBool>(pair.as_str()).unwrap();
+                result.extend(quote! {Value::from(#inner)});
             }
             Rule::EOI => return result,
             _ => {

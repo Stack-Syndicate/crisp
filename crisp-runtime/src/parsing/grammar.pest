@@ -13,7 +13,7 @@ tdefn = { "(" ~ "define" ~ symbol ~ "[" ~ symbol_type* ~ "]" ~ s_expression ~ ")
 ifb   = { "(" ~ "if" ~ s_expression ~ s_expression ~ s_expression ~ ")" }
 opvar = { "(" ~ operator ~ s_expression ~ s_expression+ ~ ")" }
 list  = { "(" ~ s_expression* ~ ")" }
-atom  = { number | symbol | string | boolean | comment }
+atom  = { number | string | boolean | symbol | comment }
 
 symbol_type =  { symbol ~ type }
 number      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "."* ~ ASCII_DIGIT* }
@@ -24,16 +24,17 @@ TNUM        = @{ "Number" }
 TBOOL       = @{ "Boolean" }
 TLIST       = @{ "List" }
 TFUN        = @{ "Function" }
-operator    =  { add | sub | mul | div | less | more }
+operator    =  { add | sub | mul | div | less | more | equal }
 add         = @{ "+" }
 sub         = @{ "-" }
 mul         = @{ "*" }
 div         = @{ "/" }
 less        = @{ "<" }
 more        = @{ ">" }
+equal       = @{ "=" }
 string      =  { "\"" ~ (string_char)* ~ "\"" }
 string_char =  { ("\\\"" | "\\\\" | !("\"" | "\\") ~ ANY) }
 comment     = @{ "//" ~ (!"\n" ~ ANY)* }
-boolean     =  { "true" | "false" }
+boolean     =  @{ "true" | "false" }
 
 WHITESPACE = _{ " " | "\t" | "\n" }
