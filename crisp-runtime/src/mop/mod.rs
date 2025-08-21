@@ -3,14 +3,24 @@ use std::collections::HashMap;
 
 type Method = Arc<dyn Fn(&mut Object, Vec<Object>) -> Object>;
 
-pub enum Type {
+pub enum Number {
     F32(f32), F64(f64),
     I8(i8), I16(i16), I32(i32), I64(i64), I128(i128),
     BYTE(u8),
     U16(u16), U32(u32), U64(u64), U128(u128),
-    STRING(String),
+}
+
+pub enum Collection {
+    DICTIONARY(HashMap<Object, Object>),
     LIST(Vec<Object>),
-    FUNCTION(Method)
+}
+
+pub enum Type {
+    NUMBER(Number),
+    STRING(String),
+    COLLECTION(Collection),
+    FUNCTION(Method),
+    ITERABLE(dyn Iterator)
 }
 
 pub struct Object {
@@ -28,6 +38,9 @@ pub trait MetaObject {
     fn add_delegate(&mut self, delegate: Arc<dyn MetaObject>);
     fn get_method(&self, name: &str) -> Option<Method>;
     fn instantiate(&self) -> Object;
+    fn list_methods(&self) -> Object;
+    fn name(&self) -> &str;
+    fn delegates(&self) -> Vec<Arc<dyn MetaObject>>;
 }
 
 #[derive(Clone)]
@@ -56,7 +69,7 @@ impl MetaObject for BaseMetaObject {
         if let Some(m) = self.methods.get(name) {
             return Some(m.clone())
         }
-        for d in &self.delegates {
+        for d in &self.delegates.iter() {
             if let Some(m) = d.get_method(name) {
                 return Some(m)
             }
@@ -68,5 +81,14 @@ impl MetaObject for BaseMetaObject {
             data: Arc::new(Type::BYTE(0u8)),
             meta: Arc::new(self.clone())
         }
+    }
+    fn list_methods(&self) -> Vec<String> {
+        self.methods.keys().cloned().collect()
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn delegates(&self) -> Vec<Arc<dyn MetaObject>> {
+        self.delegates.clone()
     }
 }

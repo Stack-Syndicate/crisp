@@ -1,0 +1,7 @@
+[package]
+name = "crisp-aot"
+version = "0.1.0"
+edition = "2024"
+description = "Ahead-of-time compiler for Crisp"
+
+[dependencies]

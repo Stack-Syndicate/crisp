@@ -22,6 +22,8 @@ uuid = "1.18.0"
 
 [workspace]
 members = [
+    "crisp-aot",
+    "crisp-jit",
     "crisp-macro",
     "crisp-runtime"
 ]

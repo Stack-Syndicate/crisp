@@ -47,6 +47,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crisp-aot"
+version = "0.1.0"
+
+[[package]]
+name = "crisp-jit"
+version = "0.1.0"
+
+[[package]]
 name = "crisp-macro"
 version = "0.1.0"
 dependencies = [
