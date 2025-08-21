@@ -1,9 +1,11 @@
 pub mod parsing;
-use std::{ops::Add, sync::Arc};
+pub mod mop;
+use std::{fmt::Debug, ops::{Add, Div, Mul, Sub}, sync::Arc};
 use parsing::*;
 use pest::iterators::{Pair, Pairs};
 use proc_macro2::TokenStream;
 use quote::quote;
+use mop::*;
 
 #[derive(Clone)]
 pub enum Value {

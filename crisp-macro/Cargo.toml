@@ -1,8 +1,8 @@
 [package]
 name = "crisp-macro"
 authors = ["Glenn Wallace glennw-coding@proton.me"]
-description = "A proc macro for the lisp-like programming language which (one day!) integrates seamlessly with C/C++ and Rust libraries."
-version = "0.0.1"
+description = "A proc macro for the lisp-like programming language Crisp which (one day!) integrates seamlessly with C/C++ and Rust libraries."
+version = "0.1.0"
 edition = "2024"
 keywords = ["lisp", "repl", "programming-language", "crisp"]
 categories = ["parser-implementations", "compilers"]
@@ -15,7 +15,7 @@ pest_derive = "2.8.1"
 proc-macro2 = "1.0.101"
 quote = "1.0.40"
 syn = { version = "2.0.106", features = ["full"] }
-crisp-runtime = { version = "0.0.1", path = "../crisp-runtime" }
+crisp-runtime = { version = "0.1.0", path = "../crisp-runtime" }
 
 [lib]
 proc-macro = true
