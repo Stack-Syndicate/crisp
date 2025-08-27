@@ -21,9 +21,4 @@ crisp-runtime = { version = "0.1.0", path = "crisp-runtime" }
 uuid = "1.18.0"
 
 [workspace]
-members = [
-    "crisp-aot",
-    "crisp-jit",
-    "crisp-macro",
-    "crisp-runtime"
-]
+members = ["crisp-macro", "crisp-runtime"]

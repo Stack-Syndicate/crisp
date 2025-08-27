@@ -11,7 +11,11 @@ fn basic_arithmetic() {
 #[test]
 fn functions() {
     crisp!((define [x y] (+ x y)));
-    crisp!((define f1 [x Number y Number] (+ x y)));
-    crisp!((define f2 [x Number y] (+ x y)));
+    crisp!((define f1 [x I64 y I64] (+ x y)));
+    crisp!((define f2 [x I64 y] (+ x y)));
     crisp!((define f3 [x y] (+ x y)));
+    crisp!((define f4 [x] (
+        (define f_inner [a b] (+ a b))
+        (f_inner x 2)
+    )));
 }
