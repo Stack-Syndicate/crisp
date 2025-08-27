@@ -31,6 +31,7 @@ fn loops() {
 
 #[test]
 fn if_statements() {
+    crisp!((if (= 1 1) true false));
     assert_eq!(crisp!((if (= 1 1) true false)), true.into());
     assert_eq!(crisp!((if (> 1 1) true false)), false.into());
     assert_eq!(crisp!((if (< 3 10) true false)), true.into());

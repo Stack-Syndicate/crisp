@@ -10,9 +10,40 @@ use std::{
     sync::Arc,
 };
 
-pub type FnPtr = Arc<dyn Fn(&[Value]) -> Value>;
-
 #[derive(Clone)]
+pub struct FnPtr(pub Arc<dyn Fn(&[Value]) -> Value>);
+impl PartialEq for FnPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self == other
+    }
+    fn ne(&self, other: &Self) -> bool {
+        self != other
+    }
+}
+impl PartialOrd for FnPtr {
+    fn ge(&self, other: &Self) -> bool {
+        true
+    }
+    fn gt(&self, other: &Self) -> bool {
+        true
+    }
+    fn le(&self, other: &Self) -> bool {
+        true
+    }
+    fn lt(&self, other: &Self) -> bool {
+        true
+    }
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        None
+    }
+}
+impl Debug for FnPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        return Ok(());
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Value {
     STR(String),
     F32(f32),
@@ -27,7 +58,7 @@ pub enum Value {
 impl Value {
     pub fn call(&self, args: &[Value]) -> Value {
         match self {
-            Value::FN(f) => (f)(args),
+            Value::FN(f) => (f.0)(args),
             _ => panic!("Cannot call a non-function."),
         }
     }
@@ -80,7 +111,7 @@ impl Value {
             Err("Not a list".to_string())
         }
     }
-    fn as_function(&self) -> Result<Arc<dyn Fn(&[Value]) -> Value>, String> {
+    fn as_function(&self) -> Result<FnPtr, String> {
         if let Value::FN(f) = self {
             Ok(f.clone())
         } else {
@@ -151,6 +182,68 @@ impl Sub for Value {
         }
     }
 }
+impl Mul for Value {
+    type Output = Value;
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::F32(x), Value::F32(y)) => Value::F32(x * y),
+            (Value::F32(x), Value::F64(y)) => Value::F64(x as f64 * y),
+            (Value::F32(x), Value::I32(y)) => Value::F32(x * y as f32),
+            (Value::F32(x), Value::I64(y)) => Value::F64(x as f64 * y as f64),
+
+            (Value::F64(x), Value::F64(y)) => Value::F64(x * y),
+            (Value::F64(x), Value::F32(y)) => Value::F64(x * y as f64),
+            (Value::F64(x), Value::I32(y)) => Value::F64(x * y as f64),
+            (Value::F64(x), Value::I64(y)) => Value::F64(x * y as f64),
+
+            (Value::I32(x), Value::I32(y)) => Value::I32(x * y),
+            (Value::I32(x), Value::I64(y)) => Value::I64(x as i64 * y),
+            (Value::I32(x), Value::F32(y)) => Value::F32(x as f32 * y),
+            (Value::I32(x), Value::F64(y)) => Value::F64(x as f64 * y),
+
+            (Value::I64(x), Value::I64(y)) => Value::I64(x * y),
+            (Value::I64(x), Value::I32(y)) => Value::I64(x * y as i64),
+            (Value::I64(x), Value::F32(y)) => Value::F64(x as f64 * y as f64),
+            (Value::I64(x), Value::F64(y)) => Value::F64(x as f64 * y),
+
+            (Value::BYTE(x), Value::BYTE(y)) => Value::BYTE(x * y),
+            _ => {
+                panic!("Incompatible types for adding.")
+            }
+        }
+    }
+}
+impl Div for Value {
+    type Output = Value;
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::F32(x), Value::F32(y)) => Value::F32(x / y),
+            (Value::F32(x), Value::F64(y)) => Value::F64(x as f64 / y),
+            (Value::F32(x), Value::I32(y)) => Value::F32(x / y as f32),
+            (Value::F32(x), Value::I64(y)) => Value::F64(x as f64 / y as f64),
+
+            (Value::F64(x), Value::F64(y)) => Value::F64(x / y),
+            (Value::F64(x), Value::F32(y)) => Value::F64(x / y as f64),
+            (Value::F64(x), Value::I32(y)) => Value::F64(x / y as f64),
+            (Value::F64(x), Value::I64(y)) => Value::F64(x / y as f64),
+
+            (Value::I32(x), Value::I32(y)) => Value::I32(x / y),
+            (Value::I32(x), Value::I64(y)) => Value::I64(x as i64 / y),
+            (Value::I32(x), Value::F32(y)) => Value::F32(x as f32 / y),
+            (Value::I32(x), Value::F64(y)) => Value::F64(x as f64 / y),
+
+            (Value::I64(x), Value::I64(y)) => Value::I64(x / y),
+            (Value::I64(x), Value::I32(y)) => Value::I64(x / y as i64),
+            (Value::I64(x), Value::F32(y)) => Value::F64(x as f64 / y as f64),
+            (Value::I64(x), Value::F64(y)) => Value::F64(x as f64 / y),
+
+            (Value::BYTE(x), Value::BYTE(y)) => Value::BYTE(x / y),
+            _ => {
+                panic!("Incompatible types for adding.")
+            }
+        }
+    }
+}
 impl From<isize> for Value {
     fn from(value: isize) -> Self {
         Value::I32(value as i32)
@@ -194,37 +287,9 @@ impl From<Value> for i64 {
         }
     }
 }
-impl Sub<Value> for Value {
-    type Output = Value;
-    fn sub(self, other: Value) -> Self::Output {
-        match self {
-            Value::Number(s) => Value::Number(s - other.as_number().unwrap()),
-            _ => {
-                panic!("Cannot subtract these types")
-            }
-        }
-    }
-}
-impl Mul<Value> for Value {
-    type Output = Value;
-    fn mul(self, other: Value) -> Self::Output {
-        match self {
-            Value::Number(s) => Value::Number(s * other.as_number().unwrap()),
-            _ => {
-                panic!("Cannot multiply these types")
-            }
-        }
-    }
-}
-impl Div<Value> for Value {
-    type Output = Value;
-    fn div(self, other: Value) -> Self::Output {
-        match self {
-            Value::Number(s) => Value::Number(s / other.as_number().unwrap()),
-            _ => {
-                panic!("Cannot divide these types")
-            }
-        }
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Value::BOOL(value)
     }
 }
 
@@ -289,10 +354,10 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
                 let body = transpile_to_rust(inner.next().unwrap().into_inner());
                 let indices = 0..params.len();
                 result.extend(
-                    quote! {let #var_name = Value::FN(Arc::new(|args: &[Value]| {
+                    quote! {let #var_name = Value::FN(FnPtr(Arc::new(|args: &[Value]| {
                          #(let #params = args[#indices].clone().into();)*
                          (#body).into()
-                    }));},
+                    })));},
                 );
             }
             Rule::tfun => {
@@ -304,10 +369,10 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
                 }
                 let body = transpile_to_rust(inner.next().unwrap().into_inner());
                 let indices = 0..params.len();
-                result.extend(quote! {Value::FN(Arc::new(|args: &[Value]| {
+                result.extend(quote! {Value::FN(FnPtr(Arc::new(|args: &[Value]| {
                      #(let #params = args[#indices].clone().into();)*
                      #body
-                }));});
+                })));});
             }
             Rule::tdef => {
                 let mut inner = pair.into_inner();
@@ -331,10 +396,10 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
                     transpile_to_rust(inner.next().expect("Error parsing body").into_inner());
                 let indices = 0..params.len();
                 result.extend(
-                    quote! {let #var_name = Value::FN(Arc::new(Box::new(|args: &[Value]| {
+                    quote! {let #var_name = Value::FN(FnPtr(Arc::new(Box::new(|args: &[Value]| {
                          #(let #params = args[#indices].clone().into();)*
                          (#body).into()
-                    })));},
+                    }))));},
                 );
             }
             Rule::ifb => {
@@ -434,10 +499,10 @@ fn parse_function(pair: Pair<'_, Rule>) -> TokenStream {
     }
     let body = transpile_to_rust(inner.next().unwrap().into_inner());
     let indices = 0..params.len();
-    quote! {Value::FN(Arc::new(|args: &[Value]| {
+    quote! {Value::FN(FnPtr(Arc::new(|args: &[Value]| {
         #(let #params = args[#indices].clone().into();)*
         #body
-    }));}
+    })));}
 }
 
 fn parse_typed_identifier(ident: Pair<'_, Rule>) -> TokenStream {
