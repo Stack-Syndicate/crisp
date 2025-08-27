@@ -19,3 +19,12 @@ fn functions() {
         (f_inner x 2)
     )));
 }
+
+#[test]
+fn loops() {
+    let mut x = 0;
+    crisp!((for i in (0, 10) (
+        (set x (+ x 1))
+    )));
+    assert_eq!(x, 10);
+}

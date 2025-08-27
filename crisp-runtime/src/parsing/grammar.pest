@@ -2,7 +2,8 @@ program = { SOI ~ s_expression* ~ EOI }
 
 s_expression = { special_form | list | atom }
 
-special_form = { tfun | tdef | tdefn | fun | defn | def | ifb | opvar | fnvar }
+special_form = { forloop | set | tfun | tdef | tdefn | fun | defn | def | ifb | opvar | fnvar | range }
+
 
 fun   = { "(" ~ "define" ~ "[" ~ (symbol_type | symbol)* ~ "]" ~ s_expression ~ ")" }
 def   = { "(" ~ "define" ~ (symbol_type | symbol) ~ s_expression ~ ")" }
@@ -11,6 +12,9 @@ tfun  = { "(" ~ "define" ~ "[" ~ symbol_type* ~ "]" ~ s_expression ~ ")" }
 tdef  = { "(" ~ "define" ~ symbol_type ~ s_expression ~ ")" }
 tdefn = { "(" ~ "define" ~ symbol ~ "[" ~ symbol_type* ~ "]" ~ s_expression ~ ")" }
 ifb   = { "(" ~ "if" ~ s_expression ~ s_expression ~ s_expression ~ ")" }
+forloop =  { "(" ~ "for" ~ symbol ~ "in" ~ s_expression ~ s_expression ~ ")" }
+range = { "(" ~ number ~ "," ~ number ~ ("," ~ number)? ~ ")" }
+set = {"(" ~ "set" ~ symbol ~ s_expression ~ ")"}
 opvar = { "(" ~ operator ~ s_expression ~ s_expression+ ~ ")" }
 fnvar = { "(" ~ symbol ~ s_expression* ~ ")"}
 list  = { "(" ~ s_expression* ~ ")" }

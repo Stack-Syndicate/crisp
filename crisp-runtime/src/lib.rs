@@ -1,4 +1,5 @@
 pub mod parsing;
+use num_iter::{range, range_step};
 use parsing::*;
 use pest::iterators::{Pair, Pairs};
 use proc_macro2::TokenStream;
@@ -198,6 +199,31 @@ pub fn transpile_to_rust(pairs: Pairs<'_, Rule>) -> TokenStream {
     let mut result = TokenStream::new();
     for pair in pairs {
         match pair.as_rule() {
+            Rule::forloop => {
+                let mut inner = pair.into_inner();
+                let dummy = syn::parse_str::<syn::Ident>(inner.next().unwrap().as_str()).unwrap();
+                let iterator = transpile_to_rust(inner.next().unwrap().into_inner());
+                let expression = transpile_to_rust(inner.next().unwrap().into_inner());
+                result.extend(quote! {for #dummy in #iterator {#expression}});
+            }
+            Rule::range => {
+                let mut inner = pair.into_inner();
+                let min = syn::parse_str::<syn::Lit>(inner.next().unwrap().as_str()).unwrap();
+                let max = syn::parse_str::<syn::Lit>(inner.next().unwrap().as_str()).unwrap();
+                let step = inner.next();
+                if let Some(s) = step {
+                    let s_trans = transpile_to_rust(s.into_inner());
+                    result.extend(quote! {range_step(#min, #max, #s_trans)})
+                } else {
+                    result.extend(quote! {range(#min, #max)})
+                }
+            }
+            Rule::set => {
+                let mut inner = pair.into_inner();
+                let var = syn::parse_str::<syn::Ident>(inner.next().unwrap().as_str()).unwrap();
+                let val = transpile_to_rust(inner.next().unwrap().into_inner());
+                result.extend(quote! {#var = #val;});
+            }
             Rule::fun => {
                 result.extend(parse_function(pair));
             }

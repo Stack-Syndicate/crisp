@@ -1,7 +1,4 @@
-use crisp_runtime::{
-    parsing::{CrispParser, Rule},
-    transpile_to_rust,
-};
+use crisp_runtime::{parsing::*, transpile_to_rust};
 use pest::Parser;
 use proc_macro::TokenStream;
 use quote::quote;

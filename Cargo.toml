@@ -19,6 +19,7 @@ syn = { version = "2.0.106", features = ["full"] }
 crisp-macro = { version = "0.1.0", path = "crisp-macro" }
 crisp-runtime = { version = "0.1.0", path = "crisp-runtime" }
 uuid = "1.18.0"
+num-iter = "0.1.45"
 
 [workspace]
 members = ["crisp-macro", "crisp-runtime"]

@@ -10,6 +10,7 @@ license = "MIT"
 repository = "https://github.com/Stack-Syndicate/crisp"
 
 [dependencies]
+num-iter = "0.1.45"
 pest = "2.8.1"
 pest_derive = "2.8.1"
 proc-macro2 = "1.0.101"
