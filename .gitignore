@@ -29,3 +29,9 @@ target
 
 .clj-kondo
 .lsp
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target

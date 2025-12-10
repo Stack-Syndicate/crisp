@@ -1,0 +1,23 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" | COMMENT }
+COMMENT    = _{ ";" ~ (!"\n" ~ ANY)* }
+
+program =  { SOI ~ expr* ~ EOI }
+expr    = _{ list | quoted | atom }
+
+list   = { "(" ~ expr* ~ ("." ~ expr)? ~ ")" }
+quoted = { "'" ~ expr }
+
+atom = _{ boolean | number | string | symbol }
+
+boolean =  { "#" ~ ("t" | "f") }
+number  =  { sign? ~ integer ~ frac? }
+sign    =  { "-" | "+" }
+integer = @{ ASCII_DIGIT+ }
+frac    = @{ "." ~ ASCII_DIGIT+ }
+
+string       = { "\"" ~ string_inner* ~ "\"" }
+string_inner = { "\\\"" | "\\\\" | "\\n" | "\\t" | !("\"" | "\\") ~ ANY }
+
+symbol       = { symbol_start ~ symbol_rest* }
+symbol_start = { ASCII_ALPHANUMERIC | "+" | "-" | "*" | "/" | "!" | "?" | "_" | "<" | ">" | "=" | ":" | "$" | "%" | "&" | "^" | "~" | "." }
+symbol_rest  = { ASCII_ALPHANUMERIC | "+" | "-" | "*" | "/" | "!" | "?" | "_" | "<" | ">" | "=" | ":" | "$" | "%" | "&" | "^" | "~" | "." }
