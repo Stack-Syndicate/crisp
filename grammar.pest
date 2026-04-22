@@ -1,23 +1,17 @@
-WHITESPACE = _{ " " | "\t" | "\r" | "\n" | COMMENT }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 COMMENT    = _{ ";" ~ (!"\n" ~ ANY)* }
 
-program =  { SOI ~ expr* ~ EOI }
-expr    = _{ list | quoted | atom }
+file = { SOI ~ s_expr* ~ EOI }
 
-list   = { "(" ~ expr* ~ ("." ~ expr)? ~ ")" }
-quoted = { "'" ~ expr }
+s_expr = _{ list | atom }
 
-atom = _{ boolean | number | string | symbol }
+list =  { "(" ~ s_expr* ~ ")" }
+atom = _{ number | typed_symbol | pointer_ref | symbol | string }
 
-boolean =  { "#" ~ ("t" | "f") }
-number  =  { sign? ~ integer ~ frac? }
-sign    =  { "-" | "+" }
-integer = @{ ASCII_DIGIT+ }
-frac    = @{ "." ~ ASCII_DIGIT+ }
+type_annotation = { ":" ~ symbol }
+typed_symbol    = { symbol ~ type_annotation }
 
-string       = { "\"" ~ string_inner* ~ "\"" }
-string_inner = { "\\\"" | "\\\\" | "\\n" | "\\t" | !("\"" | "\\") ~ ANY }
-
-symbol       = { symbol_start ~ symbol_rest* }
-symbol_start = { ASCII_ALPHANUMERIC | "+" | "-" | "*" | "/" | "!" | "?" | "_" | "<" | ">" | "=" | ":" | "$" | "%" | "&" | "^" | "~" | "." }
-symbol_rest  = { ASCII_ALPHANUMERIC | "+" | "-" | "*" | "/" | "!" | "?" | "_" | "<" | ">" | "=" | ":" | "$" | "%" | "&" | "^" | "~" | "." }
+number      = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+symbol      = @{ !("&" | number) ~ (ASCII_ALPHANUMERIC | "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | "<" | "=" | ">" | "?" | "@" | "[" | "]" | "^" | "_" | "{" | "}" | "~")+ }
+string      = ${ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+pointer_ref = @{ "&" ~ symbol }
