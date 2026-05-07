@@ -1,3 +1,4 @@
+#![feature(path_absolute_method)]
 use std::{fs::File, io::Read};
 
 use crate::{
@@ -32,6 +33,7 @@ fn main() {
     info!("Log level: {}", log_level.to_string().to_uppercase());
     let cmd = args.command;
     let mut source = "".to_string();
+    let path: &'static str;
     match cmd {
         Command::T { input } => {
             debug!("Opening file: {:?}", input);
@@ -40,10 +42,12 @@ fn main() {
                 error!("File {:?} not found, exiting", input);
                 return;
             } else {
-                File::open(input)
+                File::open(&input)
                     .unwrap()
                     .read_to_string(&mut source)
                     .expect("Could not read the file as source code");
+                let path_str = input.absolute().unwrap().to_string_lossy().into_owned();
+                path = Box::leak(path_str.into_boxed_str());
             }
         }
     }
@@ -57,7 +61,7 @@ fn main() {
     match pest_parse {
         Ok(mut pairs) => {
             debug!("Constructing AST");
-            ast = pest_to_ast(pairs.next().unwrap().into_inner());
+            ast = pest_to_ast(pairs.next().unwrap().into_inner(), path);
             analyze_ast(ast);
         }
         Err(e) => {
