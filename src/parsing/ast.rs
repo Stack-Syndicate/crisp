@@ -1,40 +1,72 @@
+use pest::Span;
 #[allow(unused)]
 use pest::iterators::{Pair, Pairs};
 
 use crate::parsing::{Rule, types::Number};
 
 #[derive(Debug, Clone)]
-pub struct SourceInfo {
+pub struct SourceInfo<'a> {
     pub line: usize,
     pub col: usize,
+    pub span: Span<'a>,
+    pub path: &'a str,
 }
 
 #[derive(Debug)]
-pub enum Node {
-    List(Vec<Node>, SourceInfo),
-    Symbol(String, SourceInfo),
-    TypedSymbol(String, String, SourceInfo),
-    Number(Number, SourceInfo),
-    String(String, SourceInfo),
-    Pointer(String, SourceInfo),
-    Boolean(bool, SourceInfo),
+pub enum Node<'a> {
+    List(Vec<Node<'a>>, SourceInfo<'a>),
+    Symbol(String, SourceInfo<'a>),
+    TypedSymbol(String, String, SourceInfo<'a>),
+    Number(Number, SourceInfo<'a>),
+    String(String, SourceInfo<'a>),
+    Pointer(String, SourceInfo<'a>),
+    Boolean(bool, SourceInfo<'a>),
 }
-impl Node {
-    pub fn from_pair(pair: Pair<Rule>) -> Self {
+impl<'a> Node<'a> {
+    pub fn from_pair(pair: Pair<'a, Rule>, path: &'a str) -> Self {
         let line = pair.line_col().0;
         let col = pair.line_col().1;
         match pair.as_rule() {
-            Rule::string => Node::String(pair.as_str().to_string(), SourceInfo { line, col }),
-            Rule::symbol => Node::Symbol(pair.as_str().to_string(), SourceInfo { line, col }),
-            Rule::pointer_ref => Node::Pointer(pair.as_str().to_string(), SourceInfo { line, col }),
+            Rule::string => Node::String(
+                pair.as_str().to_string(),
+                SourceInfo {
+                    line,
+                    col,
+                    span: pair.as_span(),
+                    path,
+                },
+            ),
+            Rule::symbol => Node::Symbol(
+                pair.as_str().to_string(),
+                SourceInfo {
+                    line,
+                    col,
+                    span: pair.as_span(),
+                    path,
+                },
+            ),
+            Rule::pointer_ref => Node::Pointer(
+                pair.as_str().to_string(),
+                SourceInfo {
+                    line,
+                    col,
+                    span: pair.as_span(),
+                    path,
+                },
+            ),
             Rule::typed_symbol => {
-                let mut symbol_and_type = pair.into_inner();
+                let mut symbol_and_type = pair.clone().into_inner();
                 let symbol = symbol_and_type.next().unwrap();
                 let annotation = symbol_and_type.next().unwrap();
                 Node::TypedSymbol(
                     symbol.as_str().to_string(),
                     annotation.as_str().to_string(),
-                    SourceInfo { line, col },
+                    SourceInfo {
+                        line,
+                        col,
+                        span: pair.as_span(),
+                        path,
+                    },
                 )
             }
             // Number literals should occupy the least number of bits
@@ -71,25 +103,46 @@ impl Node {
                         Number::I64(s.parse::<i64>().expect("Value out of range"))
                     }
                 };
-                Node::Number(n, SourceInfo { line, col })
+                Node::Number(
+                    n,
+                    SourceInfo {
+                        line,
+                        col,
+                        span: pair.as_span(),
+                        path,
+                    },
+                )
             }
             Rule::boolean => Node::Boolean(
                 pair.as_str().parse().expect("Could not parse boolean."),
-                SourceInfo { line, col },
+                SourceInfo {
+                    line,
+                    col,
+                    span: pair.as_span(),
+                    path,
+                },
             ),
             // Lists are just a Vec of Nodes
             Rule::file | Rule::list => {
                 let mut list = Vec::new();
-                let pairs = pair.into_inner();
+                let pairs = pair.clone().into_inner();
                 for pair in pairs {
-                    list.push(Node::from_pair(pair));
+                    list.push(Node::from_pair(pair, path));
                 }
-                Node::List(list, SourceInfo { line, col })
+                Node::List(
+                    list,
+                    SourceInfo {
+                        line,
+                        col,
+                        span: pair.as_span(),
+                        path,
+                    },
+                )
             }
             _ => panic!("Unexpected pair {:?}", pair),
         }
     }
-    pub fn get_info(&self) -> &SourceInfo {
+    pub fn get_info(&self) -> &SourceInfo<'a> {
         match self {
             Node::List(_, info)
             | Node::Symbol(_, info)
@@ -102,9 +155,9 @@ impl Node {
     }
 }
 
-pub fn pest_to_ast(pairs: Pairs<Rule>) -> Vec<Node> {
+pub fn pest_to_ast<'a>(pairs: Pairs<'a, Rule>, path: &'a str) -> Vec<Node<'a>> {
     pairs
         .filter(|pair| pair.as_rule() != Rule::EOI)
-        .map(Node::from_pair)
+        .map(|pair| Node::from_pair(pair, path))
         .collect()
 }
