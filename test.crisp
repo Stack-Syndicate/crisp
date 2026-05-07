@@ -1,0 +1,40 @@
+(set version:f64 1.0)
+
+(fn:i32 (uh what:i32) (
+  (fn fn fn fn fn)
+))
+
+(fn:i32 wawawa (uh:i32 what:i32 uh:i32) (
+  (fn)
+))
+
+(fn:i32 compute_total (base:i32 multiplier:i32) (
+  (set total:i32 0)
+  (for i:i32 (range 1 5) (
+    (set total (+ total (* i multiplier)))
+  ))
+  (ret total)
+))
+
+(fn:i8 is_active (status:i32) (
+  (if (= status 1) true false)
+))
+
+(fn:i64 get_buffer_ref (buf:i64) (
+  (ret &buf)
+))
+
+(fn:string hello (name:string) (
+  (ret (+ "hello " name))
+))
+
+(fn:i32 main () (
+  (set result:i32 (compute_total 10 2))
+  
+  (if (is_active 1)
+    (print result)
+    (print "uh oh!"))
+    
+  (ret 0)
+))
+
