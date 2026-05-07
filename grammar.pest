@@ -6,12 +6,13 @@ file = { SOI ~ s_expr* ~ EOI }
 s_expr = _{ list | atom }
 
 list =  { "(" ~ s_expr* ~ ")" }
-atom = _{ number | typed_symbol | pointer_ref | symbol | string }
+atom = _{ number | boolean | typed_symbol | pointer_ref | symbol | string }
 
-type_annotation = { ":" ~ symbol }
-typed_symbol    = { symbol ~ type_annotation }
+type_annotation = _{ ":" ~ symbol }
+typed_symbol    =  { symbol ~ type_annotation }
 
 number      = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+boolean     = @{ "true" | "false" }
 symbol      = @{ !("&" | number) ~ (ASCII_ALPHANUMERIC | "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | "<" | "=" | ">" | "?" | "@" | "[" | "]" | "^" | "_" | "{" | "}" | "~")+ }
 string      = ${ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 pointer_ref = @{ "&" ~ symbol }

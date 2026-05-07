@@ -1,83 +1,67 @@
-use pest::Parser;
-use pest_derive::Parser;
+use std::{fs::File, io::Read};
 
-use crate::types::{
-    Structure::*,
-    Type::{self, *},
-    Value::*,
+use crate::{
+    analysis::analyze_ast,
+    cli::{Args, Command},
+    parsing::{
+        CrispParser, Rule,
+        ast::{Node, pest_to_ast},
+    },
 };
+use clap::Parser as CLIParser;
+use log::{debug, error, info, warn};
+use pest::Parser;
 
-pub(crate) mod types;
-
-#[derive(Parser)]
-#[grammar = "grammar.pest"]
-pub struct CrispParser;
-
-fn parse_value(pair: pest::iterators::Pair<Rule>) -> Type {
-    match pair.as_rule() {
-        Rule::list => {
-            let items = pair.into_inner().map(parse_value).collect();
-            Structure(List(items))
-        }
-        Rule::typed_symbol => {
-            let mut inner = pair.into_inner();
-            let identifier = inner.next().unwrap().as_str().to_string();
-            let annotation = inner
-                .next()
-                .unwrap()
-                .into_inner()
-                .next()
-                .unwrap()
-                .as_str()
-                .to_string();
-            Structure(TypedSymbol {
-                identifier,
-                annotation,
-            })
-        }
-        Rule::symbol => Structure(Symbol(pair.as_str().to_string())),
-        Rule::number => {
-            let s = pair.as_str();
-            let value = if let Ok(u) = s.parse::<u32>() {
-                U32(u)
-            } else if let Ok(i) = s.parse::<i32>() {
-                I32(i)
-            } else if let Ok(u64_val) = s.parse::<u64>() {
-                U64(u64_val)
-            } else if let Ok(i64_val) = s.parse::<i64>() {
-                I64(i64_val)
-            } else {
-                let f = s.parse::<f64>().unwrap_or(0.0);
-                if f.abs() <= f32::MAX as f64 && f.abs() >= f32::MIN_POSITIVE as f64 || f == 0.0 {
-                    F32(f as f32)
-                } else {
-                    F64(f)
-                }
-            };
-            Primitive(value)
-        }
-        Rule::string => {
-            let raw = pair.as_str();
-            Primitive(STR(raw[1..raw.len() - 1].to_string()))
-        }
-        _ => unreachable!("Unexpected rule: {:?}", pair.as_rule()),
-    }
-}
+pub(crate) mod analysis;
+pub(crate) mod cli;
+pub(crate) mod parsing;
 
 fn main() {
-    let input = "(defun add-one (x: int) (+ x 1))";
-    let successful_parse = CrispParser::parse(Rule::file, input);
-    let ast: Vec<Type>;
-    match successful_parse {
-        Ok(mut pairs) => {
-            let file_pair = pairs.next().unwrap();
-            ast = file_pair
-                .into_inner()
-                .filter(|pair| pair.as_rule() != Rule::EOI) // Skip the end of input
-                .map(parse_value)
-                .collect();
-            println!("{:#?}", ast);
+    // Parse CLI args and set up logging env
+    let args = Args::parse();
+    let log_level = match args.verbose {
+        0 => log::LevelFilter::Info,
+        1 => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Trace,
+    };
+    env_logger::Builder::new()
+        .filter_level(log_level)
+        .format_timestamp(None)
+        .write_style(env_logger::WriteStyle::Always)
+        .init();
+    info!("Log level: {}", log_level.to_string().to_uppercase());
+    let cmd = args.command;
+    let mut source = "".to_string();
+    match cmd {
+        Command::T { input } => {
+            debug!("Opening file: {:?}", input);
+            // Check if the file exists
+            if !input.exists() {
+                error!("File {:?} not found, exiting", input);
+                return;
+            } else {
+                File::open(input)
+                    .unwrap()
+                    .read_to_string(&mut source)
+                    .expect("Could not read the file as source code");
+            }
         }
-        Err(e) => eprintln!("Parse failed: {}", e),
+    }
+    if source.is_empty() {
+        error!("Source file is empty!");
+        return;
+    }
+    debug!("Parsing input");
+    let pest_parse = CrispParser::parse(Rule::file, &source);
+    let ast: Vec<Node>;
+    match pest_parse {
+        Ok(mut pairs) => {
+            debug!("Constructing AST");
+            ast = pest_to_ast(pairs.next().unwrap().into_inner());
+            analyze_ast(ast);
+        }
+        Err(e) => {
+            error!("Parse failed: {}", e)
+        }
     }
 }
