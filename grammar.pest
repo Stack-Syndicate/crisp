@@ -8,8 +8,9 @@ s_expr = _{ list | atom }
 list =  { "(" ~ s_expr* ~ ")" }
 atom = _{ number | boolean | typed_symbol | pointer_ref | symbol | string }
 
-type_annotation = _{ ":" ~ symbol }
-typed_symbol    =  { symbol ~ type_annotation }
+optional_modifier =  { "?" }
+type_annotation   = _{ ":" ~ symbol ~ optional_modifier? }
+typed_symbol      =  { symbol ~ type_annotation }
 
 number      = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean     = @{ "true" | "false" }
