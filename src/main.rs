@@ -1,21 +1,18 @@
 #![feature(path_absolute_method)]
 use std::{fs::File, io::Read};
 
-use crate::{
-    analysis::analyze_ast,
+use anyhow::Result;
+use clap::Parser as CLIParser;
+use crisp::{
     cli::{Args, Command},
+    parse_file,
     parsing::{
         CrispParser, Rule,
-        ast::{Node, pest_to_ast},
+        ast::{cst_to_ast, nodes::Node},
     },
 };
-use clap::Parser as CLIParser;
 use log::{debug, error, info, warn};
 use pest::Parser;
-
-pub(crate) mod analysis;
-pub(crate) mod cli;
-pub(crate) mod parsing;
 
 fn main() {
     // Parse CLI args and set up logging env
@@ -31,8 +28,10 @@ fn main() {
         .write_style(env_logger::WriteStyle::Always)
         .init();
     info!("Log level: {}", log_level.to_string().to_uppercase());
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("Exiting because: {info}");
+    }));
     let cmd = args.command;
-    let mut source = "".to_string();
     let path: &'static str;
     match cmd {
         Command::T { input } => {
@@ -42,30 +41,12 @@ fn main() {
                 error!("File {:?} not found, exiting", input);
                 return;
             } else {
-                File::open(&input)
-                    .unwrap()
-                    .read_to_string(&mut source)
-                    .expect("Could not read the file as source code");
                 let path_str = input.absolute().unwrap().to_string_lossy().into_owned();
                 path = Box::leak(path_str.into_boxed_str());
             }
         }
     }
-    if source.is_empty() {
-        error!("Source file is empty!");
-        return;
-    }
+
     debug!("Parsing input");
-    let pest_parse = CrispParser::parse(Rule::file, &source);
-    let ast: Vec<Node>;
-    match pest_parse {
-        Ok(mut pairs) => {
-            debug!("Constructing AST");
-            ast = pest_to_ast(pairs.next().unwrap().into_inner(), path);
-            analyze_ast(ast);
-        }
-        Err(e) => {
-            error!("Parse failed: {}", e)
-        }
-    }
+    let parse_result = parse_file(path);
 }

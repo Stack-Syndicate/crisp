@@ -8,12 +8,12 @@ s_expr = _{ list | atom }
 list =  { "(" ~ s_expr* ~ ")" }
 atom = _{ number | boolean | typed_symbol | pointer_ref | symbol | string }
 
-optional_modifier =  { "?" }
+optional_modifier = _{ "?" }
 type_annotation   = _{ ":" ~ symbol ~ optional_modifier? }
 typed_symbol      =  { symbol ~ type_annotation }
 
 number      = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean     = @{ "true" | "false" }
-symbol      = @{ !("&" | number) ~ (ASCII_ALPHANUMERIC | "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | "<" | "=" | ">" | "?" | "@" | "[" | "]" | "^" | "_" | "{" | "}" | "~")+ }
+symbol      = @{ !("&" | number) ~ (ASCII_ALPHANUMERIC | "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | "<" | "=" | ">" | "?" | "@" | "^" | "_" | "~")+ }
 string      = ${ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 pointer_ref = @{ "&" ~ symbol }
