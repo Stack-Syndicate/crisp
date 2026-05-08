@@ -6,7 +6,7 @@ use crate::{
     cli::{Args, Command},
     parsing::{
         CrispParser, Rule,
-        ast::{Node, pest_to_ast},
+        ast_old::{ASTNode, cst_to_ast},
     },
 };
 use clap::Parser as CLIParser;
@@ -31,6 +31,9 @@ fn main() {
         .write_style(env_logger::WriteStyle::Always)
         .init();
     info!("Log level: {}", log_level.to_string().to_uppercase());
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("panic occurred: {info}");
+    }));
     let cmd = args.command;
     let mut source = "".to_string();
     let path: &'static str;
@@ -57,11 +60,11 @@ fn main() {
     }
     debug!("Parsing input");
     let pest_parse = CrispParser::parse(Rule::file, &source);
-    let ast: Vec<Node>;
+    let ast: Vec<ASTNode>;
     match pest_parse {
         Ok(mut pairs) => {
             debug!("Constructing AST");
-            ast = pest_to_ast(pairs.next().unwrap().into_inner(), path);
+            ast = cst_to_ast(pairs.next().unwrap().into_inner(), path);
             analyze_ast(ast);
         }
         Err(e) => {

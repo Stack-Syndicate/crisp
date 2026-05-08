@@ -2,7 +2,10 @@ use pest::Span;
 #[allow(unused)]
 use pest::iterators::{Pair, Pairs};
 
-use crate::parsing::{Rule, types::Number};
+use crate::parsing::{
+    Rule,
+    types::{List, Number},
+};
 
 #[derive(Debug, Clone)]
 pub struct SourceInfo<'a> {
@@ -13,21 +16,21 @@ pub struct SourceInfo<'a> {
 }
 
 #[derive(Debug)]
-pub enum Node<'a> {
-    List(Vec<Node<'a>>, SourceInfo<'a>),
+pub enum ASTNode<'a> {
+    List(List, SourceInfo<'a>),
     Symbol(String, SourceInfo<'a>),
-    TypedSymbol(String, String, SourceInfo<'a>),
+    TypedSymbol(String, String, SourceInfo<'a>, SourceInfo<'a>),
     Number(Number, SourceInfo<'a>),
     String(String, SourceInfo<'a>),
     Pointer(String, SourceInfo<'a>),
     Boolean(bool, SourceInfo<'a>),
 }
-impl<'a> Node<'a> {
+impl<'a> ASTNode<'a> {
     pub fn from_pair(pair: Pair<'a, Rule>, path: &'a str) -> Self {
         let line = pair.line_col().0;
         let col = pair.line_col().1;
         match pair.as_rule() {
-            Rule::string => Node::String(
+            Rule::string => ASTNode::String(
                 pair.as_str().to_string(),
                 SourceInfo {
                     line,
@@ -36,7 +39,7 @@ impl<'a> Node<'a> {
                     path,
                 },
             ),
-            Rule::symbol => Node::Symbol(
+            Rule::symbol => ASTNode::Symbol(
                 pair.as_str().to_string(),
                 SourceInfo {
                     line,
@@ -45,7 +48,7 @@ impl<'a> Node<'a> {
                     path,
                 },
             ),
-            Rule::pointer_ref => Node::Pointer(
+            Rule::pointer_ref => ASTNode::Pointer(
                 pair.as_str().to_string(),
                 SourceInfo {
                     line,
@@ -58,13 +61,19 @@ impl<'a> Node<'a> {
                 let mut symbol_and_type = pair.clone().into_inner();
                 let symbol = symbol_and_type.next().unwrap();
                 let annotation = symbol_and_type.next().unwrap();
-                Node::TypedSymbol(
+                ASTNode::TypedSymbol(
                     symbol.as_str().to_string(),
                     annotation.as_str().to_string(),
                     SourceInfo {
-                        line,
-                        col,
-                        span: pair.as_span(),
+                        line: symbol.line_col().0,
+                        col: symbol.line_col().1,
+                        span: symbol.as_span(),
+                        path,
+                    },
+                    SourceInfo {
+                        line: annotation.line_col().0,
+                        col: annotation.line_col().1,
+                        span: annotation.as_span(),
                         path,
                     },
                 )
@@ -103,7 +112,7 @@ impl<'a> Node<'a> {
                         Number::I64(s.parse::<i64>().expect("Value out of range"))
                     }
                 };
-                Node::Number(
+                ASTNode::Number(
                     n,
                     SourceInfo {
                         line,
@@ -113,7 +122,7 @@ impl<'a> Node<'a> {
                     },
                 )
             }
-            Rule::boolean => Node::Boolean(
+            Rule::boolean => ASTNode::Boolean(
                 pair.as_str().parse().expect("Could not parse boolean."),
                 SourceInfo {
                     line,
@@ -122,14 +131,14 @@ impl<'a> Node<'a> {
                     path,
                 },
             ),
-            // Lists are just a Vec of Nodes
+            // Lists are just a Vec of Nodes.... OR ARE THEY?
             Rule::file | Rule::list => {
                 let mut list = Vec::new();
                 let pairs = pair.clone().into_inner();
                 for pair in pairs {
-                    list.push(Node::from_pair(pair, path));
+                    list.push(ASTNode::from_pair(pair, path));
                 }
-                Node::List(
+                ASTNode::List(
                     list,
                     SourceInfo {
                         line,
@@ -144,20 +153,20 @@ impl<'a> Node<'a> {
     }
     pub fn get_info(&self) -> &SourceInfo<'a> {
         match self {
-            Node::List(_, info)
-            | Node::Symbol(_, info)
-            | Node::TypedSymbol(_, _, info)
-            | Node::Number(_, info)
-            | Node::String(_, info)
-            | Node::Pointer(_, info)
-            | Node::Boolean(_, info) => info,
+            ASTNode::List(_, info)
+            | ASTNode::Symbol(_, info)
+            | ASTNode::TypedSymbol(_, _, info, _)
+            | ASTNode::Number(_, info)
+            | ASTNode::String(_, info)
+            | ASTNode::Pointer(_, info)
+            | ASTNode::Boolean(_, info) => info,
         }
     }
 }
 
-pub fn pest_to_ast<'a>(pairs: Pairs<'a, Rule>, path: &'a str) -> Vec<Node<'a>> {
+pub fn cst_to_ast<'a>(pairs: Pairs<'a, Rule>, path: &'a str) -> Vec<ASTNode<'a>> {
     pairs
         .filter(|pair| pair.as_rule() != Rule::EOI)
-        .map(|pair| Node::from_pair(pair, path))
+        .map(|pair| ASTNode::from_pair(pair, path))
         .collect()
 }

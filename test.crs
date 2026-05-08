@@ -1,6 +1,6 @@
 (set version:f64 1.0)
 
-(fn:i32 (uhhhhh what:i32) (
+(fn:i31 (uhhhhh what:i32) (
   (fn fn fn fn fn)
 ))
 

@@ -1,19 +1,13 @@
-use colored::Colorize;
-use log::{debug, error};
+use log::error;
+use pest::iterators::Pair;
 
-use crate::{
-    analysis::structure::{validate_annotations, validate_fn_definitions},
-    parsing::ast::{ASTNode, SourceInfo},
-};
+use crate::parsing::{Rule, ast::nodes::Expr};
 
-pub(crate) mod scope;
-pub(crate) mod structure;
+pub(crate) mod nodes;
+pub(crate) mod validation;
 
-pub fn analyze_ast(ast: Vec<ASTNode>) {
-    debug!("Validating type annotations");
-    let valid_annotations = validate_annotations(&ast);
-    debug!("Validating fn definitions");
-    let valid_fns = validate_fn_definitions(&ast);
+fn cst_to_ast(pair: Pair<Rule>) -> Expr {
+    todo!()
 }
 
 pub fn print_error(msg: &str, info: &SourceInfo) {
@@ -44,16 +38,4 @@ pub fn print_error(msg: &str, info: &SourceInfo) {
         indent,
         pointer
     );
-}
-
-pub fn print_debug(msg: &str, extra: &str, info: &SourceInfo) {
-    debug!(
-        "[{}:{}|{}:{}|-> {} {}",
-        "L".to_string().blue(),
-        info.line.to_string().blue(),
-        "C".to_string().blue(),
-        info.col.to_string().blue(),
-        msg,
-        extra.to_string().blue()
-    )
 }
