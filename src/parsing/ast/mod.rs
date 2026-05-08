@@ -1,13 +1,17 @@
+use colored::Colorize;
 use log::error;
 use pest::iterators::Pair;
 
-use crate::parsing::{Rule, ast::nodes::Expr};
+use crate::parsing::{
+    Rule,
+    ast::nodes::{Expr, SourceInfo},
+};
 
 pub(crate) mod nodes;
 pub(crate) mod validation;
 
-fn cst_to_ast(pair: Pair<Rule>) -> Expr {
-    todo!()
+pub fn cst_to_ast(pair: Pair<Rule>) -> Expr {
+    Expr::from_pair(pair)
 }
 
 pub fn print_error(msg: &str, info: &SourceInfo) {

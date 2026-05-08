@@ -1,10 +1,22 @@
-use crate::{analysis::print_error, parsing::Rule};
+use crate::parsing::{
+    Rule,
+    ast::{print_error, validation::*},
+};
 use pest::{
     Span,
     iterators::{Pair, Pairs},
 };
 
 pub struct Block<'a>(pub Vec<Expr<'a>>);
+impl<'a> Block<'a> {
+    pub fn from_pair(pair: &Pair<'a, Rule>) -> Block<'a> {
+        let mut new_block = Block(Vec::new());
+        for pair in pair.clone().into_inner() {
+            new_block.0.push(Expr::from_pair(pair));
+        }
+        new_block
+    }
+}
 
 pub enum Literal<'a> {
     String(String),
@@ -39,6 +51,31 @@ pub enum Symbol<'a> {
         info: SourceInfo<'a>,
     },
 }
+impl<'a> Symbol<'a> {
+    pub fn from_pair(pair: &Pair<'a, Rule>) -> Symbol<'a> {
+        match pair.as_rule() {
+            Rule::typed_symbol => {
+                let mut name_pairs = pair.clone().into_inner();
+                let name = name_pairs.next().unwrap().to_string();
+                let annotation = name_pairs.next().unwrap().to_string();
+                return Symbol::Typed {
+                    name,
+                    annotation,
+                    info: SourceInfo::from_pair(pair),
+                };
+            }
+            Rule::symbol => {
+                return Symbol::Untyped {
+                    name: pair.to_string(),
+                    info: SourceInfo::from_pair(pair),
+                };
+            }
+            _ => {
+                panic!("Unexpected rule")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SourceInfo<'a> {
@@ -46,6 +83,16 @@ pub struct SourceInfo<'a> {
     pub col: usize,
     pub span: Span<'a>,
     pub path: &'a str,
+}
+impl<'a> SourceInfo<'a> {
+    pub fn from_pair(pair: &Pair<'a, Rule>) -> SourceInfo<'a> {
+        SourceInfo {
+            line: pair.line_col().0,
+            col: pair.line_col().1,
+            span: pair.as_span(),
+            path: "",
+        }
+    }
 }
 
 pub enum Expr<'a> {
@@ -72,7 +119,7 @@ pub enum Expr<'a> {
     },
     Given {
         predicate: Block<'a>,
-        conditions: Block<'a>,
+        cases: Block<'a>,
     },
     Set {
         variable: Symbol<'a>,
@@ -88,15 +135,10 @@ pub enum Expr<'a> {
     Invalid,
 }
 impl<'a> Expr<'a> {
-    pub fn from_pair(pair: Pair<Rule>) -> Expr<'a> {
+    pub fn from_pair(pair: Pair<'a, Rule>) -> Expr<'a> {
         match pair.as_rule() {
             Rule::file => parse_program(pair),
             Rule::list => parse_list(pair),
-            Rule::symbol => parse_symbol(pair),
-            Rule::typed_symbol => parse_typed_symbol(pair),
-            Rule::number => parse_number(pair),
-            Rule::string => parse_string(pair),
-            Rule::pointer_ref => parse_pointer_ref(pair),
             _ => {
                 panic!("AST construction failed: unexpected syntax")
             }
@@ -104,16 +146,13 @@ impl<'a> Expr<'a> {
     }
 }
 
-fn parse_program<'a>(pair: Pair<Rule>) -> Expr<'a> {
-    let mut exprs = Block(Vec::new());
-    for pair in pair.into_inner() {
-        exprs.0.push(Expr::from_pair(pair));
-    }
+fn parse_program<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    let exprs = Block::from_pair(&pair);
     Expr::Program { exprs }
 }
 
-fn parse_list<'a>(pair: Pair<Rule>) -> Expr<'a> {
-    let mut pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+fn parse_list<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let op = pairs[0].as_str();
     match op {
         "fn" => parse_fn(pair),
@@ -123,37 +162,23 @@ fn parse_list<'a>(pair: Pair<Rule>) -> Expr<'a> {
         "given" => parse_given(pair),
         "set" => parse_set(pair),
         "ret" => parse_ret(pair),
+        _ => todo!(),
     }
 }
 
-fn parse_fn<'a>(pair: Pair<Rule>) -> Expr<'a> {
-    if !validate_fn(pair) {
-        print_error(
-            "Invalid fn definition",
-            SourceInfo {
-                line: pair.line_col().0,
-                col: pair.line_col().1,
-                span: pair.as_span(),
-                path: "",
-            },
-        );
+fn parse_fn<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_fn(&pair) {
+        print_error("Invalid fn definition", &SourceInfo::from_pair(&pair));
         return Expr::Invalid;
     }
-    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
-    // Fn name
+    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let mut name = None;
     if matches!(pairs[1].as_rule(), Rule::symbol) {
         name = Some(Symbol::Untyped {
             name: pairs[1].to_string(),
-            info: SourceInfo {
-                line: pairs[1].line_col().0,
-                col: pairs[1].line_col().1,
-                span: pairs[1].as_span(),
-                path: "",
-            },
+            info: SourceInfo::from_pair(&pair),
         })
     }
-    // Fn body
     let mut body = Block(Vec::new());
     let body_pairs;
     if name.is_some() {
@@ -167,51 +192,79 @@ fn parse_fn<'a>(pair: Pair<Rule>) -> Expr<'a> {
     Expr::Fn { name, body }
 }
 
-fn parse_if<'a>(pair: Pair<Rule>) -> Expr<'a> {
-    if !validate_if(pair) {
-        print_error(
-            "Invalid if statement",
-            SourceInfo {
-                line: pair.line_col().0,
-                col: pair.line_col().1,
-                span: pair.as_span(),
-                path: "",
-            },
-        );
+fn parse_if<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_if(&pair) {
+        print_error("Invalid if statement", &SourceInfo::from_pair(&pair));
         return Expr::Invalid;
     }
     let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
     let predicate = Box::new(Expr::from_pair(pairs[1].clone()));
-    let mut yes = Block(Vec::new());
-    for pair in pairs[2].clone().into_inner() {
-        yes.0.push(Expr::from_pair(pair));
-    }
+    let yes = Block::from_pair(&pairs[2]);
     let no;
     if let Some(pair) = pairs.get(3) {
-        let mut no_block = Block(Vec::new());
-        for pair in pair.into_inner() {
-            no_block.0.push(Expr::from_pair(pair));
-        }
-        no = Some(no_block);
+        no = Some(Block::from_pair(&pair));
     } else {
         no = None;
     }
     Expr::If { predicate, yes, no }
 }
 
-fn parse_let<'a>(pair: Pair<Rule>) -> Expr<'a> {
-    if !validate_let(pair) {
-        print_error(
-            "Invalid assignment",
-            SourceInfo {
-                line: pair.line_col().0,
-                col: pair.line_col().1,
-                span: pair.as_span(),
-                path: "",
-            },
-        );
+fn parse_let<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_let(&pair) {
+        print_error("Invalid assignment", &SourceInfo::from_pair(&pair));
         return Expr::Invalid;
     }
+    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let name = Symbol::from_pair(&pairs[1]);
+    let value = Block::from_pair(&pairs[2]);
+    Expr::Let { name, value }
+}
 
-    todo!()
+fn parse_for<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_for(&pair) {
+        print_error("Invalid for loop", &SourceInfo::from_pair(&pair));
+        return Expr::Invalid;
+    }
+    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let dummy = Symbol::from_pair(&pairs[1]);
+    let iterator_pair = pairs[2].clone();
+    let iterator = Block::from_pair(&iterator_pair);
+    let body_pair = pairs[3].clone();
+    let body = Block::from_pair(&body_pair);
+    Expr::For {
+        dummy,
+        iterator,
+        body,
+    }
+}
+
+fn parse_given<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_given(&pair) {
+        print_error("Invalid given statement", &SourceInfo::from_pair(&pair));
+        return Expr::Invalid;
+    }
+    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let predicate = Block::from_pair(&pairs[1]);
+    let cases = Block::from_pair(&pairs[2]);
+    Expr::Given { predicate, cases }
+}
+
+fn parse_set<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_set(&pair) {
+        print_error("Invalid reassignment", &SourceInfo::from_pair(&pair));
+        return Expr::Invalid;
+    }
+    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let variable = Symbol::from_pair(&pairs[1]);
+    let value = Block::from_pair(&pairs[2]);
+    Expr::Set { variable, value }
+}
+
+fn parse_ret<'a>(pair: Pair<'a, Rule>) -> Expr<'a> {
+    if !validate_ret(&pair) {
+        print_error("Invalid return statement", &SourceInfo::from_pair(&pair));
+        return Expr::Invalid;
+    }
+    let value = Block::from_pair(&pair);
+    Expr::Return { value }
 }
