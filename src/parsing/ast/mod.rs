@@ -4,14 +4,14 @@ use pest::iterators::Pair;
 
 use crate::parsing::{
     Rule,
-    ast::nodes::{Expr, SourceInfo},
+    ast::nodes::{Node, SourceInfo},
 };
 
-pub(crate) mod nodes;
-pub(crate) mod validation;
+pub mod nodes;
+pub mod validation;
 
-pub fn cst_to_ast(pair: Pair<Rule>) -> Expr {
-    Expr::from_pair(pair)
+pub fn cst_to_ast<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
+    Node::from_pair(pair, path)
 }
 
 pub fn print_error(msg: &str, info: &SourceInfo) {
