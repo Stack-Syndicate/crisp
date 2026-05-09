@@ -1,18 +1,11 @@
 #![feature(path_absolute_method)]
-use std::{fs::File, io::Read};
 
-use anyhow::Result;
 use clap::Parser as CLIParser;
 use crisp::{
     cli::{Args, Command},
-    parse_file,
-    parsing::{
-        CrispParser, Rule,
-        ast::{cst_to_ast, nodes::Node},
-    },
+    parsing::parse_file,
 };
-use log::{debug, error, info, warn};
-use pest::Parser;
+use log::{debug, error, info};
 
 fn main() {
     // Parse CLI args and set up logging env
@@ -46,7 +39,6 @@ fn main() {
             }
         }
     }
-
     debug!("Parsing input");
-    let parse_result = parse_file(path);
+    let _parse_result = parse_file(path);
 }
