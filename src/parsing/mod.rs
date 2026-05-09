@@ -3,8 +3,8 @@ use std::{fs::File, io::Read};
 
 use log::error;
 use pest::{
-    Parser, Position,
-    error::{Error, ErrorVariant, InputLocation, LineColLocation},
+    Parser,
+    error::{Error, ErrorVariant, InputLocation},
 };
 use pest_derive::Parser;
 
@@ -42,49 +42,17 @@ pub fn parse_str(source: String, path: &'static str) -> Result<Node, String> {
 }
 
 pub fn print_pest_error(err: Error<Rule>, path: &str, source: &str) {
-    let (mut line, mut col) = match err.line_col {
-        LineColLocation::Pos((l, c)) => (l, c),
-        LineColLocation::Span(start_lc, _) => start_lc,
-    };
-    let (mut start, mut end) = match err.location {
+    let (start, end) = match err.location {
         InputLocation::Pos(pos) => (pos, pos),
         InputLocation::Span((s, e)) => (s, e),
     };
 
     let msg = match &err.variant {
-        ErrorVariant::ParsingError { positives, .. } => {
-            if positives.contains(&Rule::list) && start >= source.len() {
-                "Syntax Error: Unclosed parenthesis".to_string()
-            } else {
-                format!("Syntax Error: Expected one of {:?}", positives)
-            }
-        }
+        ErrorVariant::ParsingError { .. } => "Parsing error".to_string(),
         ErrorVariant::CustomError { message } => message.clone(),
     };
 
-    if msg.contains("Unclosed") {
-        let mut bracket_count = 0;
-        for (i, ch) in source.char_indices().rev() {
-            if ch == ')' {
-                bracket_count += 1;
-            } else if ch == '(' {
-                if bracket_count == 0 {
-                    // Found the unmatched bracket
-                    start = i;
-                    end = i + 1;
-
-                    // Update line/col for the actual bracket position
-                    let pos = Position::new(source, i).unwrap();
-                    let (l, c) = pos.line_col();
-                    line = l;
-                    col = c;
-                    break;
-                }
-                bracket_count -= 1;
-            }
-        }
-    }
-
+    let line_num = source[..start].chars().filter(|&c| c == '\n').count() + 1;
     let line_start = source[..start].rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line_end = source[start..]
         .find('\n')
@@ -92,20 +60,119 @@ pub fn print_pest_error(err: Error<Rule>, path: &str, source: &str) {
         .unwrap_or(source.len());
     let line_text = &source[line_start..line_end];
 
-    let span_len = (end - start).max(1);
-    let indent = " ".repeat(col.saturating_sub(1));
-    let pointer = "~".repeat(span_len).red();
+    let local_start = start - line_start;
+    let local_end = (end - line_start).max(local_start + 1);
 
-    error!(
-        "{}\n--> {}[{}|{}]\n{:>4} |\n{:>4} | {}\n     | {}{}",
-        msg.bold(),
+    let mut output = format!("{}\n", msg.red().bold());
+
+    output.push_str(&format!(
+        "  --> {}:{}:{}\n",
         path.blue(),
-        line.to_string().red(),
-        col.to_string().red(),
-        "",
-        line.to_string().red(),
-        line_text,
-        indent,
-        pointer
-    );
+        line_num,
+        local_start + 1
+    ));
+
+    output.push_str(&format!("   {}\n", "|").blue());
+    output.push_str(&format!(
+        "{:>2} {} {}\n",
+        line_num.to_string().blue(),
+        "|".blue(),
+        line_text
+    ));
+
+    let underline: String = (0..line_text.len())
+        .map(|i| {
+            if i >= local_start && i < local_end {
+                '^'
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    output.push_str(&format!("   {} {}\n", "|".blue(), underline.red().bold()));
+
+    let hints = detect_common_parse_issues(source);
+    if !hints.is_empty() {
+        output.push_str(&format!("   {}\n", "|").blue());
+        for (index, hint) in hints.iter().enumerate() {
+            output.push_str(&format!(
+                "   {} {} {}",
+                "=>".blue(),
+                "Hint:".bold().yellow(),
+                hint
+            ));
+            if index != hints.len() - 1 {
+                output.push_str("\n");
+            }
+        }
+    }
+
+    error!("{}", output);
+}
+
+fn detect_common_parse_issues(source: &str) -> Vec<String> {
+    let mut hints = Vec::new();
+    let mut stack = Vec::new();
+    let mut string_start = None;
+    let mut is_triple_quote = false;
+
+    let chars: Vec<char> = source.chars().collect();
+    let (mut line, mut col) = (1, 1);
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        if i + 2 < chars.len() && chars[i..i + 3] == ['"', '"', '"'] {
+            if let Some(..) = string_start {
+                if is_triple_quote {
+                    string_start = None;
+                    is_triple_quote = false;
+                }
+            } else {
+                string_start = Some((line, col));
+                is_triple_quote = true;
+            }
+            i += 3;
+            col += 3;
+            continue;
+        }
+        if c == '"' && (i == 0 || chars[i - 1] != '\\') {
+            if let Some(_) = string_start {
+                if !is_triple_quote {
+                    string_start = None;
+                }
+            } else {
+                string_start = Some((line, col));
+                is_triple_quote = false;
+            }
+        } else if string_start.is_none() {
+            match c {
+                '(' => stack.push((line, col)),
+                ')' => {
+                    if stack.pop().is_none() {
+                        hints.push(format!("Unexpected ')' at [L{}|C{}]", line, col));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if c == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+        i += 1;
+    }
+
+    if let Some((l, c)) = string_start {
+        let label = if is_triple_quote { "\"\"\"" } else { "\"" };
+        hints.push(format!("Unclosed {} starting at [L{}|C{}]", label, l, c));
+    }
+
+    while let Some((l, c)) = stack.pop() {
+        hints.push(format!("Unclosed '(' at [L{}|C{}]", l, c));
+    }
+
+    hints
 }

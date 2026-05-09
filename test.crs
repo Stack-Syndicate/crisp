@@ -1,1 +1,1 @@
-(fn:i8 my_fn () (A))
+(fn:i8 my_fn ("x) (A))
