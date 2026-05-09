@@ -4,6 +4,7 @@ use crate::parsing::{
     Rule,
     ast::{print_error, validation::*},
 };
+use log::trace;
 use pest::{Span, iterators::Pair};
 
 #[derive(Debug)]
@@ -103,12 +104,6 @@ impl<'a> Symbol<'a> {
                     info: SourceInfo::from_pair(pair, path),
                 };
             }
-            Rule::pointer_ref => {
-                return Symbol::Untyped {
-                    name: pair.to_string(),
-                    info: SourceInfo::from_pair(pair, path),
-                };
-            }
             _ => {
                 panic!("Unexpected rule")
             }
@@ -136,12 +131,9 @@ impl<'a> SourceInfo<'a> {
 
 #[derive(Debug)]
 pub enum Node<'a> {
-    Program {
-        expressions: Vec<Node<'a>>,
-    },
     Fn {
         name: Option<Symbol<'a>>,
-        params: Box<Node<'a>>,
+        params: Vec<Symbol<'a>>,
         body: Box<Node<'a>>,
     },
     If {
@@ -162,29 +154,19 @@ pub enum Node<'a> {
         predicate: Box<Node<'a>>,
         cases: Box<Node<'a>>,
     },
-    Set {
-        variable: Symbol<'a>,
-        value: Box<Node<'a>>,
-    },
     Return {
         value: Box<Node<'a>>,
     },
     Identifier {
         name: Symbol<'a>,
     },
-    Reference {
-        name: Symbol<'a>,
-    },
     Literal(Literal),
     Call {
-        identifier: Box<Node<'a>>,
+        name: Symbol<'a>,
         args: Vec<Node<'a>>,
     },
     Block {
         expressions: Vec<Node<'a>>,
-    },
-    Params {
-        parameters: Vec<Symbol<'a>>,
     },
     Invalid,
 }
@@ -194,9 +176,6 @@ impl<'a> Node<'a> {
             Rule::file => parse_program(pair, path),
             Rule::list => parse_list(pair, path),
             Rule::symbol | Rule::typed_symbol => Node::Identifier {
-                name: Symbol::from_pair(&pair, path),
-            },
-            Rule::pointer_ref => Node::Reference {
                 name: Symbol::from_pair(&pair, path),
             },
             Rule::number => Node::Literal(Literal::Number {
@@ -222,7 +201,7 @@ fn parse_program<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
             _ => expressions.push(Node::from_pair(inner_pair, path)),
         }
     }
-    Node::Program { expressions }
+    Node::Block { expressions }
 }
 
 fn parse_list<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
@@ -245,7 +224,6 @@ fn parse_list<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
         "let" => return parse_let(pair, path),
         "for" => return parse_for(pair, path),
         "given" => return parse_given(pair, path),
-        "set" => return parse_set(pair, path),
         "ret" => return parse_ret(pair, path),
         _ => return parse_call(pair, path),
     }
@@ -255,7 +233,7 @@ fn parse_fn<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     if !validate_fn(&pair, path) {
         return Node::Invalid;
     }
-    let mut pairs = pair.into_inner().peekable();
+    let mut pairs = pair.clone().into_inner().peekable();
     pairs.next();
     let mut name = None;
     if let Some(p) = pairs.peek() {
@@ -269,18 +247,18 @@ fn parse_fn<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     if !validate_params(&params_pair, path) {
         return Node::Invalid;
     }
-    let params = Box::new(parse_params(params_pair, path));
+    let params = params_pair
+        .into_inner()
+        .map(|pair| Symbol::from_pair(&pair, path))
+        .collect();
     let body_pair = pairs.next().unwrap_or_else(|| {
         core::panic!("Function missing body at {}", path);
     });
     if !validate_block(&body_pair, path) {
         return Node::Invalid;
     }
-    let expressions = body_pair
-        .into_inner()
-        .map(|p| Node::from_pair(p, path))
-        .collect();
-    let body = Box::new(Node::Block { expressions });
+    let body = Box::new(block_from_pairs(body_pair.into_inner(), path));
+    trace!("Function definition detected\n{}", pair.as_str());
     Node::Fn { name, params, body }
 }
 
@@ -288,15 +266,9 @@ fn parse_if<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     if !validate_if(&pair, path) {
         return Node::Invalid;
     }
-    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let predicate = Box::new(Node::from_pair(pairs[1].clone(), path));
-    let mut yes_expressions = Vec::new();
-    for pair in pairs[2].clone().into_inner() {
-        yes_expressions.push(Node::from_pair(pair, path));
-    }
-    let yes = Box::new(Node::Block {
-        expressions: yes_expressions,
-    });
+    let yes = Box::new(block_from_pairs(pairs[2].clone().into_inner(), path));
     let no = pairs.get(3).map(|pair| {
         Box::new(Node::Block {
             expressions: pair
@@ -306,6 +278,7 @@ fn parse_if<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
                 .collect(),
         })
     });
+    trace!("If statement detected\n{}", pair.as_str());
     Node::If { predicate, yes, no }
 }
 
@@ -314,15 +287,10 @@ fn parse_let<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
         print_error("Invalid assignment", &SourceInfo::from_pair(&pair, path));
         return Node::Invalid;
     }
-    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
+    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let name = Symbol::from_pair(&pairs[1], path);
-    let mut value_expressions = Vec::new();
-    for pair in pairs[2].clone().into_inner() {
-        value_expressions.push(Node::from_pair(pair, path));
-    }
-    let value = Box::new(Node::Block {
-        expressions: value_expressions,
-    });
+    let value = Box::new(block_from_pairs(pairs[2].clone().into_inner(), path));
+    trace!("Let statement detected\n{}", pair.as_str());
     Node::Let { name, value }
 }
 
@@ -333,22 +301,9 @@ fn parse_for<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     }
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let dummy = Symbol::from_pair(&pairs[1], path);
-    let iterator_pair = pairs[2].clone();
-    let mut iterator_expressions = Vec::new();
-    for pair in iterator_pair.into_inner() {
-        iterator_expressions.push(Node::from_pair(pair, path));
-    }
-    let iterator = Box::new(Node::Block {
-        expressions: iterator_expressions,
-    });
-    let body_pair = pairs[3].clone();
-    let mut body_expressions = Vec::new();
-    for pair in body_pair.into_inner() {
-        body_expressions.push(Node::from_pair(pair, path));
-    }
-    let body = Box::new(Node::Block {
-        expressions: body_expressions,
-    });
+    let iterator = Box::new(block_from_pairs(pairs[2].clone().into_inner(), path));
+    let body = Box::new(block_from_pairs(pairs[3].clone().into_inner(), path));
+    trace!("For statement detected\n{}", pair.as_str());
     Node::For {
         dummy,
         iterator,
@@ -358,11 +313,10 @@ fn parse_for<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
 
 fn parse_given<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     if !validate_given(&pair, path) {
-        // validate_given already prints the specific error, so we just return Invalid
         return Node::Invalid;
     }
     let mut inner = pair.into_inner();
-    inner.next(); // Skip the "given" symbol
+    inner.next();
     let predicate_pair = inner.next().unwrap();
     let predicate = Box::new(Node::from_pair(predicate_pair, path));
     let cases_nodes: Vec<Node> = inner
@@ -383,60 +337,30 @@ fn parse_given<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     }
 }
 
-fn parse_set<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
-    if !validate_set(&pair, path) {
-        return Node::Invalid;
-    }
-    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
-    let variable = Symbol::from_pair(&pairs[1], path);
-    let mut value_expressions = Vec::new();
-    for pair in pairs[2].clone().into_inner() {
-        value_expressions.push(Node::from_pair(pair, path));
-    }
-    let value = Box::new(Node::Block {
-        expressions: value_expressions,
-    });
-    Node::Set { variable, value }
-}
-
 fn parse_ret<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
     if !validate_ret(&pair, path) {
         return Node::Invalid;
     }
-    let expressions = pair
-        .into_inner()
-        .skip(1)
-        .map(|pair| Node::from_pair(pair, path))
-        .collect();
+    trace!("Return keyword detected\n{}", pair.as_str());
     Node::Return {
-        value: Box::new(Node::Block { expressions }),
+        value: Box::new(block_from_pairs(pair.into_inner().skip(1), path)),
     }
 }
 
 fn parse_call<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
-    let mut pairs = pair.into_inner();
-    let identifier = Box::new(Node::from_pair(pairs.next().unwrap(), path));
+    let mut pairs = pair.clone().into_inner();
+    let name_pair = pairs.next().unwrap();
+    let name = Symbol::from_pair(&name_pair, path);
     let args = pairs.map(|p| Node::from_pair(p, path)).collect();
-
-    Node::Call { identifier, args }
+    trace!("Function call detected\n{}", pair.as_str());
+    Node::Call { name, args }
 }
 
-fn parse_block<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
-    if !validate_block(&pair, path) {
-        return Node::Invalid;
+fn block_from_pairs<'a>(
+    pairs: impl Iterator<Item = Pair<'a, Rule>>,
+    path: &'static str,
+) -> Node<'a> {
+    Node::Block {
+        expressions: pairs.map(|p| Node::from_pair(p, path)).collect(),
     }
-    let pairs: Vec<Pair<Rule>> = pair.into_inner().collect();
-    let mut expressions = Vec::new();
-    for pair in pairs {
-        expressions.push(Node::from_pair(pair, path));
-    }
-    Node::Block { expressions }
-}
-
-fn parse_params<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
-    let parameters = pair
-        .into_inner()
-        .map(|p| Symbol::from_pair(&p, path))
-        .collect();
-    Node::Params { parameters }
 }

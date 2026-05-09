@@ -27,7 +27,7 @@ pub fn parse_str<'a>(source: String, path: &'static str) -> Result<Node<'a>, Str
         return Err("Source file is empty".to_string());
     }
     let pest_cst = CrispParser::parse(Rule::file, &source);
-    let ast = match pest_cst {
+    let _ast = match pest_cst {
         Ok(mut pairs) => {
             debug!("Constructing AST");
             cst_to_ast(pairs.next().unwrap(), path)

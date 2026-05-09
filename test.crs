@@ -1,0 +1,8 @@
+(fn foo (x:i32 y:i32 z:i32) (
+  (let x (+ 1 2))
+  (let x (+ x 1))
+  (for i (iter) (
+    (let x (+ x 1))
+  ))
+  (ret (ref x))
+))
