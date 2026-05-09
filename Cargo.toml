@@ -1,7 +1,13 @@
 [package]
 name = "crisp"
-version = "0.0.1"
+authors = ["Glenn Wallace <glennw-coding@proton.me>"]
+description = "A small, expressive Lisp-inspired programming language."
+version = "0.1.2"
 edition = "2024"
+keywords = ["compiler", "interpreter", "lisp", "programming-language"]
+categories = ["compilers", "parser-implementations"]
+license = "MIT"
+repository = "https://codeberg.org/Stack-Syndicate/crisp"
 
 [dependencies]
 anyhow = "1.0.100"
