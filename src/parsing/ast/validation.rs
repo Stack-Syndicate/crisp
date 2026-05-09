@@ -16,6 +16,13 @@ pub fn validate_fn(pair: &Pair<Rule>, path: &'static str) -> bool {
         );
         return false;
     }
+    let fn_op = pairs[0].clone();
+    if !matches!(fn_op.as_rule(), Rule::typed_symbol) {
+        print_ast_error(
+            "Function definition does not have a return type",
+            &SourceInfo::from_pair(&fn_op, path),
+        );
+    }
     let is_named = len > 1 && matches!(pairs[1].as_rule(), Rule::symbol);
     if is_named {
         if len != 4 {

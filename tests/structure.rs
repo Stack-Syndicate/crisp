@@ -45,6 +45,10 @@ fn gen_type() -> impl Strategy<Value = String> {
     ]
 }
 
+fn gen_return_type() -> impl Strategy<Value = String> {
+    prop_oneof![gen_type(), Just("void".to_string()),]
+}
+
 fn gen_param() -> impl Strategy<Value = String> {
     (gen_ident(), gen_type()).prop_map(|(name, ty)| format!("{}:{}", name, ty))
 }
@@ -56,57 +60,57 @@ fn gen_params() -> impl Strategy<Value = String> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10000))]
     #[test]
-    fn fn_named(name in gen_ident(), params in gen_params(), body in gen_body()) {
-        let source = format!("(fn {} {} {})", name, params, body);
+    fn fn_named(ret_type in gen_return_type(), name in gen_ident(), params in gen_params(), body in gen_body()) {
+        let source = format!("(fn:{} {} {} {})", ret_type, name, params, body);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_named_missing_body(name in gen_ident(), params in gen_params()) {
-        let source = format!("(fn {} {})", name, params);
+    fn fn_named_missing_body(ret_type in gen_return_type(), name in gen_ident(), params in gen_params()) {
+        let source = format!("(fn:{} {} {})", ret_type, name, params);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_named_missing_params(name in gen_ident(), body in gen_body()) {
-        let source = format!("(fn {} {})", name, body);
+    fn fn_named_missing_params(ret_type in gen_return_type(), name in gen_ident(), body in gen_body()) {
+        let source = format!("(fn:{} {} {})", ret_type, name, body);
         let mut pairs =CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_named_extra_body_parts(name in gen_ident(), params in gen_params(), body in gen_body()) {
-        let source = format!("(fn {} {} {} {})", name, params, body, body);
+    fn fn_named_extra_body_parts(ret_type in gen_return_type(), name in gen_ident(), params in gen_params(), body in gen_body()) {
+        let source = format!("(fn:{} {} {} {} {})", ret_type, name, params, body, body);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_anon(params in gen_params(), body in gen_body()) {
-        let source = format!("(fn {} {})", params, body);
+    fn fn_anon(ret_type in gen_return_type(), params in gen_params(), body in gen_body()) {
+        let source = format!("(fn:{} {} {})", ret_type, params, body);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_anon_missing_body(params in gen_params()) {
-        let source = format!("(fn {})", params);
+    fn fn_anon_missing_body(ret_type in gen_return_type(), params in gen_params()) {
+        let source = format!("(fn:{} {})", ret_type, params);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_anon_missing_params(body in gen_body()) {
-        let source = format!("(fn {})", body);
+    fn fn_anon_missing_params(ret_type in gen_return_type(), body in gen_body()) {
+        let source = format!("(fn:{} {})", ret_type, body);
         let mut pairs =CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
     }
     #[test]
-    fn fn_anon_extra_body_parts(params in gen_params(), body in gen_body()) {
-        let source = format!("(fn {} {} {})", params, body, body);
+    fn fn_anon_extra_body_parts(ret_type in gen_return_type(), params in gen_params(), body in gen_body()) {
+        let source = format!("(fn:{} {} {} {})", ret_type, params, body, body);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         assert!(!validate_fn(&pair, "test"));
