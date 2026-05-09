@@ -2,7 +2,7 @@
 name = "crisp"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 keywords = ["compiler", "interpreter", "lisp", "programming-language"]
 categories = ["compilers", "parser-implementations"]
