@@ -4,80 +4,130 @@ use colored::Colorize;
 use log::error;
 use pest::iterators::Pair;
 
-use crate::parsing::{Rule, ast::nodes::SourceInfo};
+use crate::parsing::{
+    Rule,
+    ast::nodes::{SourceInfo, Symbol},
+};
 
 pub fn validate_fn(pair: &Pair<Rule>, path: &'static str) -> bool {
-    let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
-    let len = pairs.len();
-    if len != 3 && len != 4 {
+    let mut inner = pair.clone().into_inner();
+    let fn_op = inner.next().unwrap();
+    // function definition has to start with fn:type
+    if !matches!(fn_op.as_rule(), Rule::symbol) {
         print_ast_error(
-            "Function definition is missing components; expected (fn [name] (params) (body))",
+            "Function definition must start with a typed fn symbol",
+            &SourceInfo::from_pair(&fn_op, path),
+        );
+        return false;
+    }
+    // peak ahead at the second part
+    let second = match inner.next() {
+        Some(pair) => pair,
+        None => {
+            print_ast_error(
+                "Function definition must be of the shape (fn:type name (param:type...) (body))",
+                &SourceInfo::from_pair(pair, path),
+            );
+            return false;
+        }
+    };
+    // second part might be a name or a parameter list
+    let params;
+    match second.as_rule() {
+        Rule::symbol => {
+            params = match inner.next() {
+                Some(pair) => pair,
+                None => {
+                    print_ast_error(
+                        "Function definition must be of the shape (fn:type name (param:type...) (body))",
+                        &SourceInfo::from_pair(pair, path),
+                    );
+                    return false;
+                }
+            };
+            match inner.next() {
+                Some(pair) => {
+                    if !matches!(pair.as_rule(), Rule::list) {
+                        print_ast_error("Body must be a list", &SourceInfo::from_pair(&pair, path));
+                        return false;
+                    }
+                }
+                None => {
+                    print_ast_error(
+                        "Function definition must be of the shape (fn:type name (param:type...) (body))",
+                        &SourceInfo::from_pair(pair, path),
+                    );
+                    return false;
+                }
+            };
+        }
+        Rule::list => {
+            params = second;
+            match inner.next() {
+                Some(pair) => {
+                    if !matches!(pair.as_rule(), Rule::list) {
+                        print_ast_error("Body must be a list", &SourceInfo::from_pair(&pair, path));
+                        return false;
+                    }
+                }
+                None => {
+                    print_ast_error(
+                        "Function definition must include a body which is a list",
+                        &SourceInfo::from_pair(pair, path),
+                    );
+                    return false;
+                }
+            };
+        }
+        _ => {
+            print_ast_error(
+                "Unexpected function structure",
+                &SourceInfo::from_pair(&second, path),
+            );
+            return false;
+        }
+    }
+    if inner.next().is_some() {
+        print_ast_error(
+            "Too many components in function definition",
             &SourceInfo::from_pair(pair, path),
         );
         return false;
     }
-    let fn_op = pairs[0].clone();
-    if !matches!(fn_op.as_rule(), Rule::typed_symbol) {
+    // check if params is actually a list
+    if !matches!(params.as_rule(), Rule::list) {
         print_ast_error(
-            "Function definition does not have a return type",
-            &SourceInfo::from_pair(&fn_op, path),
-        );
-    }
-    let is_named = len > 1 && matches!(pairs[1].as_rule(), Rule::symbol);
-    if is_named {
-        if len != 4 {
-            print_ast_error(
-                "Named function must have 4 parts: (fn name (params) (body))",
-                &SourceInfo::from_pair(pair, path),
-            );
-            return false;
-        }
-    } else {
-        if len != 3 {
-            print_ast_error(
-                "Anonymous function must have 3 parts: (fn (params) (body))",
-                &SourceInfo::from_pair(pair, path),
-            );
-            return false;
-        }
-    }
-    let name_idx = 1;
-    let params_idx = if is_named { 2 } else { 1 };
-    let body_idx = if is_named { 3 } else { 2 };
-    if is_named && !matches!(pairs[name_idx].as_rule(), Rule::symbol) {
-        print_ast_error(
-            "Function name must be a symbol",
-            &SourceInfo::from_pair(&pairs[name_idx], path),
+            "Parameters must be a list",
+            &SourceInfo::from_pair(&params, path),
         );
         return false;
     }
-    let params_pair = &pairs[params_idx];
-    if !matches!(params_pair.as_rule(), Rule::list) {
-        print_ast_error(
-            "Parameters must be enclosed in a list: (x:type ...)",
-            &SourceInfo::from_pair(params_pair, path),
-        );
-        return false;
-    }
-    for pair in params_pair.clone().into_inner() {
-        if !matches!(pair.as_rule(), Rule::typed_symbol) {
+    // do a quick check to see if param symbols are all typed
+    let mut is_params_valid = true;
+    for pair in params.into_inner() {
+        if !matches!(pair.as_rule(), Rule::symbol) {
             print_ast_error(
-                "Every parameter must have a type annotation (e.g., name:type)",
+                "Parameter must be a symbol",
                 &SourceInfo::from_pair(&pair, path),
             );
-            return false;
+            is_params_valid &= false;
+            continue;
+        }
+        let param_symbol = Symbol::from_pair(&pair);
+        if let Symbol::Untyped { name: _ } = param_symbol {
+            print_ast_error(
+                "Parameter must be typed",
+                &SourceInfo::from_pair(&pair, path),
+            );
+            is_params_valid &= false;
         }
     }
-    let body_pair = &pairs[body_idx];
-    if !matches!(body_pair.as_rule(), Rule::list) {
-        print_ast_error(
-            "Function body must be a list of expressions",
-            &SourceInfo::from_pair(body_pair, path),
-        );
+    if !is_params_valid {
         return false;
     }
     true
 }
+
 pub fn validate_if(pair: &Pair<Rule>, path: &'static str) -> bool {
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     // if must be 3 or 4 elements
@@ -124,8 +174,8 @@ pub fn validate_for(pair: &Pair<Rule>, path: &'static str) -> bool {
         print_ast_error("Invalid for loop", &SourceInfo::from_pair(pair, path));
         return false;
     }
-    // dummy must be symbol or typed symbol
-    if !matches!(pairs[1].as_rule(), Rule::symbol | Rule::typed_symbol) {
+    // dummy must be symbol
+    if !matches!(pairs[1].as_rule(), Rule::symbol) {
         print_ast_error(
             "Dummy index is not a symbol",
             &SourceInfo::from_pair(&pairs[1], path),
@@ -159,7 +209,7 @@ pub fn validate_let(pair: &Pair<Rule>, path: &'static str) -> bool {
         return false;
     }
     // variable name must be symbol or typed symbol
-    if !matches!(pairs[1].as_rule(), Rule::symbol | Rule::typed_symbol) {
+    if !matches!(pairs[1].as_rule(), Rule::symbol) {
         print_ast_error(
             "Variable name is not a symbol or type annotated symbol",
             &SourceInfo::from_pair(&pairs[1], path),
@@ -297,7 +347,6 @@ pub fn validate_params(pair: &Pair<Rule>, path: &'static str) -> bool {
     let mut names = HashSet::new();
     for param in inner {
         let name = match param.as_rule() {
-            Rule::typed_symbol => param.clone().into_inner().next().unwrap().as_str(),
             Rule::symbol => param.as_str(),
             _ => {
                 print_ast_error(
@@ -315,6 +364,40 @@ pub fn validate_params(pair: &Pair<Rule>, path: &'static str) -> bool {
             return false;
         }
     }
+    true
+}
+
+pub fn validate_list(pair: &Pair<Rule>, path: &'static str) -> bool {
+    let span = pair.as_span();
+    let content = span.as_str().trim();
+    if !content.starts_with('(') || !content.ends_with(')') {
+        print_ast_error(
+            "Missing surrounding parentheses",
+            &SourceInfo::from_pair(pair, path),
+        );
+        return false;
+    }
+    for inner_pair in pair.clone().into_inner() {
+        match inner_pair.as_rule() {
+            Rule::symbol => {
+                let _ = Symbol::from_pair(&inner_pair);
+            }
+            Rule::list => {
+                if !validate_list(&inner_pair, path) {
+                    return false;
+                }
+            }
+            Rule::EOI => {}
+            _ => {
+                print_ast_error(
+                    "Unexpected token in list",
+                    &SourceInfo::from_pair(&inner_pair, path),
+                );
+                return false;
+            }
+        }
+    }
+
     true
 }
 

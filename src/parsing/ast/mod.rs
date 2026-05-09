@@ -10,7 +10,7 @@ use crate::parsing::{
 pub mod nodes;
 pub mod validation;
 
-pub fn cst_to_ast<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node<'a> {
+pub fn cst_to_ast<'a>(pair: Pair<'a, Rule>, path: &'static str) -> Node {
     Node::from_pair(pair, path)
 }
 
