@@ -25,13 +25,4 @@ target
 
 /target
 
-# Clojure
-
-.clj-kondo
-.lsp
-
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target
+test.crs
