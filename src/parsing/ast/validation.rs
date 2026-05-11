@@ -130,10 +130,27 @@ pub fn validate_fn(pair: &Pair<Rule>, path: &'static str) -> bool {
 
 pub fn validate_if(pair: &Pair<Rule>, path: &'static str) -> bool {
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
+    // if must be a list in the first place
+    if !matches!(pair.as_rule(), Rule::list) {
+        print_ast_error(
+            "If statement must be a list",
+            &SourceInfo::from_pair(&pair, path),
+        );
+        return false;
+    }
     // if must be 3 or 4 elements
     if pairs.len() != 3 && pairs.len() != 4 {
         println!("{}", pairs.len());
         print_ast_error("Invalid if statement", &SourceInfo::from_pair(pair, path));
+        return false;
+    }
+    // keyword is a symbol and strictly "if"
+    let head = &pairs[0];
+    if head.as_rule() != Rule::symbol || head.as_str() != "if" {
+        print_ast_error(
+            "If statement must start with the \"if\" keyword",
+            &SourceInfo::from_pair(head, path),
+        );
         return false;
     }
     // predicate must be list, boolean or symbol

@@ -58,13 +58,38 @@ pub fn gen_params() -> impl Strategy<Value = String> {
     vec(gen_param(), 0..3).prop_map(|params| format!("({})", params.join(" ")))
 }
 
+fn non_empty<S>(s: S, fallback: &'static str) -> impl Strategy<Value = String>
+where
+    S: Strategy<Value = String>,
+{
+    s.prop_map(move |v| {
+        let v = v.trim();
+        if v.is_empty() {
+            fallback.to_string()
+        } else {
+            v.to_string()
+        }
+    })
+}
+
 pub fn gen_bad_params() -> impl Strategy<Value = String> {
-    prop_oneof![
-        gen_params().prop_map(|s| s.replace('(', "").replace(')', "")),
-        gen_params().prop_map(|s| format!("(({}))", s)),
-        (gen_ident(), gen_type()).prop_map(|(n, t)| format!("({} {})", n, t)),
-        gen_type().prop_map(|t| format!("(true:{})", t)),
-        (gen_params(), gen_ident()).prop_map(|(p, i)| format!("{}{}", p, i)),
-        gen_type().prop_map(|t| format!("(:{})", t)),
-    ]
+    use proptest::prelude::*;
+    let stripped = gen_params().prop_map(|s| s.replace(['(', ')'], "X"));
+    let glued = (gen_ident(), gen_ident()).prop_map(|(a, b)| format!("{}__{}", a, b));
+    let broken_type = gen_type().prop_map(|t| format!("{}:::", t));
+    let over_nested = gen_params().prop_map(|s| format!("(((({}))))", s));
+    prop_oneof![stripped, glued, broken_type, over_nested,]
+}
+
+pub fn gen_bad_if() -> impl Strategy<Value = String> {
+    let wrong_keyword = (gen_expr(), gen_expr(), gen_expr())
+        .prop_map(|(a, b, c)| format!("(iff {} {} {})", a, b, c));
+    let broken_keyword = (gen_expr(), gen_expr(), gen_expr())
+        .prop_map(|(a, b, c)| format!("(i f {} {} {})", a, b, c));
+    let too_few = (gen_expr(), gen_expr()).prop_map(|(a, b)| format!("(if {} {})", a, b));
+    let too_many = (gen_expr(), gen_expr(), gen_expr(), gen_expr(), gen_expr())
+        .prop_map(|(a, b, c, d, e)| format!("(if {} {} {} {} {})", a, b, c, d, e));
+    let not_list =
+        (gen_expr(), gen_expr(), gen_expr()).prop_map(|(a, b, c)| format!("if {} {} {}", a, b, c));
+    prop_oneof![wrong_keyword, broken_keyword, too_few, too_many, not_list,]
 }
