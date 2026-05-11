@@ -58,20 +58,6 @@ pub fn gen_params() -> impl Strategy<Value = String> {
     vec(gen_param(), 0..3).prop_map(|params| format!("({})", params.join(" ")))
 }
 
-fn non_empty<S>(s: S, fallback: &'static str) -> impl Strategy<Value = String>
-where
-    S: Strategy<Value = String>,
-{
-    s.prop_map(move |v| {
-        let v = v.trim();
-        if v.is_empty() {
-            fallback.to_string()
-        } else {
-            v.to_string()
-        }
-    })
-}
-
 pub fn gen_bad_params() -> impl Strategy<Value = String> {
     use proptest::prelude::*;
     let stripped = gen_params().prop_map(|s| s.replace(['(', ')'], "X"));
