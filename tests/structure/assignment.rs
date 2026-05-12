@@ -8,14 +8,14 @@ use proptest::{prop_assert, proptest};
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10000))]
     #[test]
-    fn valid_form(f in gen_let()) {
+    fn valid(f in gen_let()) {
         let source = format!("{}", f);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
         prop_assert!(validate_let(&pair, ""));
     }
     #[test]
-    fn invalid_form(f in gen_bad_let()) {
+    fn invalid(f in gen_bad_let()) {
         let source = format!("{}", f);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
