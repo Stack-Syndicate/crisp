@@ -6,7 +6,7 @@ use proptest::{
 };
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(1000))]
+    #![proptest_config(ProptestConfig::with_cases(10000))]
     #[test]
     fn valid_form(predicate in gen_body(), then_block in gen_body(), else_block in gen_body()) {
         let source = format!("(if {} {} {})", predicate, then_block, else_block);

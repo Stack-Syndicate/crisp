@@ -7,10 +7,7 @@ use proptest::{
 };
 
 pub fn gen_bool() -> impl Strategy<Value = String> {
-    prop_oneof![
-        Just("true".to_string()),
-        Just("false".to_string().to_string())
-    ]
+    prop_oneof![Just("true".to_string()), Just("false".to_string())]
 }
 
 fn list<S>(inner: S, range: std::ops::Range<usize>) -> impl Strategy<Value = String>
@@ -42,7 +39,7 @@ pub fn gen_expr() -> impl Strategy<Value = String> {
 }
 
 pub fn gen_body() -> impl Strategy<Value = String> {
-    list(gen_expr(), 1..3)
+    list(gen_expr(), 0..5)
 }
 
 pub fn gen_type() -> impl Strategy<Value = String> {
@@ -131,4 +128,24 @@ pub fn gen_bad_for() -> impl Strategy<Value = String> {
         too_few,
         too_many,
     ]
+}
+
+pub fn gen_let() -> impl Strategy<Value = String> {
+    (
+        gen_ident(),
+        prop_oneof![gen_body(), gen_number(), gen_bool(), gen_ident()],
+    )
+        .prop_map(|(a, b)| format!("(let {a} {b})"))
+}
+
+pub fn gen_bad_let() -> impl Strategy<Value = String> {
+    let too_few = gen_ident().prop_map(|a| format!("(let {a})"));
+    let too_many =
+        (gen_ident(), gen_body(), gen_body()).prop_map(|(a, b, c)| format!("(let {a} {b} {c})"));
+    let bad_binding = (
+        prop_oneof![gen_body(), gen_bool(), gen_number()],
+        gen_body(),
+    )
+        .prop_map(|(a, b)| format!("(let {a} {b})"));
+    prop_oneof![too_few, too_many, bad_binding]
 }
