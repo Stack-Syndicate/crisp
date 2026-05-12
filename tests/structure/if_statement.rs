@@ -1,13 +1,9 @@
 use crate::structure::helpers::*;
-use crisp::parsing::CrispParser;
-use crisp::parsing::Rule;
-use crisp::parsing::ast::validation::validate_if;
+use crisp::parsing::{CrispParser, Rule, ast::validation::validate_if};
 use pest::Parser;
-use proptest::collection::vec;
-use proptest::prelude::ProptestConfig;
-use proptest::prop_assert;
-use proptest::proptest;
-use proptest::strategy::Strategy;
+use proptest::{
+    collection::vec, prelude::ProptestConfig, prop_assert, proptest, strategy::Strategy,
+};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
@@ -27,7 +23,7 @@ proptest! {
         prop_assert!(!validate_if(&pair, ""));
     }
     #[test]
-    fn bad_if(if_statement in gen_bad_if()) {
+    fn invalid_form(if_statement in gen_bad_if()) {
         let source = format!("{}", if_statement);
         let mut pairs = CrispParser::parse(Rule::file, &source).unwrap();
         let pair = pairs.next().unwrap();

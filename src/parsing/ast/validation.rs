@@ -186,12 +186,25 @@ pub fn validate_if(pair: &Pair<Rule>, path: &'static str) -> bool {
 
 pub fn validate_for(pair: &Pair<Rule>, path: &'static str) -> bool {
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
-    // for must be 4 elements
     if pairs.len() != 4 {
         print_ast_error("Invalid for loop", &SourceInfo::from_pair(pair, path));
         return false;
     }
-    // dummy must be symbol
+    let for_op = &pairs[0];
+    if !matches!(for_op.as_rule(), Rule::symbol) {
+        print_ast_error(
+            "For loop must start with a for symbol",
+            &SourceInfo::from_pair(&for_op, path),
+        );
+        return false;
+    }
+    if for_op.as_str() != "for" {
+        print_ast_error(
+            "For loop must start with a for symbol",
+            &SourceInfo::from_pair(&for_op, path),
+        );
+        return false;
+    }
     if !matches!(pairs[1].as_rule(), Rule::symbol) {
         print_ast_error(
             "Dummy index is not a symbol",
@@ -199,15 +212,16 @@ pub fn validate_for(pair: &Pair<Rule>, path: &'static str) -> bool {
         );
         return false;
     }
-    // iterator must be list
-    if !matches!(pairs[2].as_rule(), Rule::list | Rule::symbol) {
+    if !matches!(
+        pairs[2].as_rule(),
+        Rule::list | Rule::symbol | Rule::boolean
+    ) {
         print_ast_error(
             "Iterator is invalid",
             &SourceInfo::from_pair(&pairs[2], path),
         );
         return false;
     }
-    // body must be a block
     if !matches!(pairs[3].as_rule(), Rule::list) {
         print_ast_error(
             "Body is not a block",
