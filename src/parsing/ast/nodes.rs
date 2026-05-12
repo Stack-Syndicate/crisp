@@ -313,7 +313,7 @@ fn parse_for(pair: Pair<Rule>, path: &'static str) -> Node {
     let dummy = Symbol::from_pair(&pairs[1]);
     let iterator = Box::new(block_from_pairs(pairs[2].clone().into_inner(), path));
     let body = Box::new(block_from_pairs(pairs[3].clone().into_inner(), path));
-    trace!("For statement detected\n{}", pair.as_str());
+    trace!("For loop detected\n{}", pair.as_str());
     Node::For {
         dummy,
         iterator,
