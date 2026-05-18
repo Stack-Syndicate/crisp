@@ -3,7 +3,7 @@
 use clap::Parser as CLIParser;
 use crisp::{
     cli::{Args, Command},
-    parsing::parse_file,
+    parsing::ast::parse_file as parse_file_to_ast,
 };
 use log::{debug, error, info};
 
@@ -40,5 +40,5 @@ fn main() {
         }
     }
     debug!("Parsing input");
-    let _parse_result = parse_file(path);
+    let _parse_result = parse_file_to_ast(path);
 }

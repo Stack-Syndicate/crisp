@@ -1,6 +1,6 @@
 use crate::structure::helpers::*;
 use crisp::parsing::ast::validation::validate_let;
-use crisp::parsing::{CrispParser, Rule};
+use crisp::parsing::ast::{CrispParser, Rule};
 use pest::Parser;
 use proptest::{prop_assert, proptest};
 

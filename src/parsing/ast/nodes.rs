@@ -1,7 +1,7 @@
 use crate::diagnostics::print_parse_error;
 use std::str::FromStr;
 
-use crate::parsing::{Rule, ast::validation::*};
+use crate::parsing::{ast::Rule, ast::validation::*};
 use log::trace;
 use pest::{Span, iterators::Pair};
 

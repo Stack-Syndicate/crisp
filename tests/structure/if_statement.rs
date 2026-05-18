@@ -1,5 +1,5 @@
 use crate::structure::helpers::*;
-use crisp::parsing::{CrispParser, Rule, ast::validation::validate_if};
+use crisp::parsing::ast::{CrispParser, Rule, validation::validate_if};
 use pest::Parser;
 use proptest::{prop_assert, proptest};
 

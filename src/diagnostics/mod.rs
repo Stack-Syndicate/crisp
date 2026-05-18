@@ -1,4 +1,4 @@
-use crate::parsing::{Rule, ast::nodes::SourceInfo};
+use crate::parsing::{ast::Rule, ast::nodes::SourceInfo};
 use colored::Colorize;
 use log::error;
 use pest::error::{Error, ErrorVariant, InputLocation};

@@ -2,9 +2,9 @@ use crate::diagnostics::print_ast_error;
 use pest::iterators::Pair;
 use std::collections::HashSet;
 
-use crate::parsing::{
+use crate::parsing::ast::{
     Rule,
-    ast::nodes::{SourceInfo, Symbol},
+    nodes::{SourceInfo, Symbol},
 };
 
 pub fn validate_fn(pair: &Pair<Rule>, path: &'static str) -> bool {
