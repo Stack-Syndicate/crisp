@@ -67,7 +67,7 @@ pub fn gen_params() -> impl Strategy<Value = String> {
 
 pub fn gen_bad_params() -> impl Strategy<Value = String> {
     prop_oneof![
-        gen_params().prop_map(|s| s.replace('(', "X").replace(')', "X")),
+        gen_params().prop_map(|s| s.replace(['(', ')'], "X")),
         (gen_ident(), gen_ident()).prop_map(|(a, b)| format!("{a}__{b}")),
         gen_type().prop_map(|t| format!("{t}:::")),
         gen_params().prop_map(|s| format!("(((({s}))))")),

@@ -1,7 +1,7 @@
-use crate::parsing::{
-    Rule,
-    ast::{print_error, validation::*},
-};
+use crate::diagnostics::print_parse_error;
+use std::str::FromStr;
+
+use crate::parsing::{Rule, ast::validation::*};
 use log::trace;
 use pest::{Span, iterators::Pair};
 
@@ -25,46 +25,47 @@ pub enum Number {
     U32(u32),
     U64(u64),
 }
-impl Number {
-    pub fn from_str(s: &str) -> Self {
+impl FromStr for Number {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
         if s.contains('.') || s.contains('e') || s.contains('E') {
             if let Ok(f) = s.parse::<f32>() {
-                return Number::F32(f);
+                return Ok(Number::F32(f));
             }
-            return Number::F64(
+            return Ok(Number::F64(
                 s.parse::<f64>()
                     .unwrap_or_else(|_| core::panic!("Invalid float literal: {}", s)),
-            );
+            ));
         }
 
         if let Ok(v) = s.parse::<u8>() {
-            return Number::U8(v);
+            return Ok(Number::U8(v));
         }
         if let Ok(v) = s.parse::<u16>() {
-            return Number::U16(v);
+            return Ok(Number::U16(v));
         }
         if let Ok(v) = s.parse::<u32>() {
-            return Number::U32(v);
+            return Ok(Number::U32(v));
         }
         if let Ok(v) = s.parse::<u64>() {
-            return Number::U64(v);
+            return Ok(Number::U64(v));
         }
 
         if let Ok(v) = s.parse::<i8>() {
-            return Number::I8(v);
+            return Ok(Number::I8(v));
         }
         if let Ok(v) = s.parse::<i16>() {
-            return Number::I16(v);
+            return Ok(Number::I16(v));
         }
         if let Ok(v) = s.parse::<i32>() {
-            return Number::I32(v);
+            return Ok(Number::I32(v));
         }
         if let Ok(v) = s.parse::<i64>() {
-            return Number::I64(v);
+            return Ok(Number::I64(v));
         }
 
         if let Ok(f) = s.parse::<f64>() {
-            return Number::F64(f);
+            return Ok(Number::F64(f));
         }
 
         core::panic!("Numeric literal out of range or invalid: {}", s);
@@ -169,14 +170,15 @@ impl Node {
                 symbol: Symbol::from_pair(&pair),
             },
             Rule::number => Node::Literal(Literal::Number {
-                literal: Number::from_str(pair.as_str()),
+                literal: Number::from_str(pair.as_str())
+                    .expect("Could not parse string as a Number type"),
             }),
             Rule::string => {
                 Node::Literal(Literal::String(pair.as_str().trim_matches('"').to_string()))
             }
             Rule::boolean => Node::Literal(Literal::Boolean(pair.as_str().parse().unwrap())),
             _ => {
-                print_error("Unexpected syntax", &SourceInfo::from_pair(&pair, path));
+                print_parse_error("Unexpected syntax", &SourceInfo::from_pair(&pair, path));
                 core::panic!("AST construction failed: rule {:?}", pair.as_rule());
             }
         }
@@ -233,10 +235,10 @@ fn parse_list(pair: Pair<Rule>, path: &'static str) -> Node {
     }
 
     let mut expressions = vec![];
-    for pair in inner.clone().into_iter() {
+    for pair in inner.clone() {
         expressions.push(Node::from_pair(pair, path));
     }
-    return Node::Block { expressions };
+    Node::Block { expressions }
 }
 
 fn parse_fn(pair: Pair<Rule>, path: &'static str) -> Node {
@@ -246,10 +248,10 @@ fn parse_fn(pair: Pair<Rule>, path: &'static str) -> Node {
     let mut pairs = pair.clone().into_inner().peekable();
     pairs.next();
     let mut name = None;
-    if let Some(p) = pairs.peek() {
-        if p.as_rule() == Rule::symbol {
-            name = Some(Symbol::from_pair(&pairs.next().unwrap()));
-        }
+    if let Some(p) = pairs.peek()
+        && p.as_rule() == Rule::symbol
+    {
+        name = Some(Symbol::from_pair(&pairs.next().unwrap()));
     }
     let params_pair = pairs.next().unwrap_or_else(|| {
         core::panic!("Function missing parameter list at {}", path);
@@ -294,7 +296,7 @@ fn parse_if(pair: Pair<Rule>, path: &'static str) -> Node {
 
 fn parse_let(pair: Pair<Rule>, path: &'static str) -> Node {
     if !validate_let(&pair, path) {
-        print_error("Invalid assignment", &SourceInfo::from_pair(&pair, path));
+        print_parse_error("Invalid assignment", &SourceInfo::from_pair(&pair, path));
         return Node::Invalid;
     }
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
@@ -306,7 +308,7 @@ fn parse_let(pair: Pair<Rule>, path: &'static str) -> Node {
 
 fn parse_for(pair: Pair<Rule>, path: &'static str) -> Node {
     if !validate_for(&pair, path) {
-        print_error("Invalid for loop", &SourceInfo::from_pair(&pair, path));
+        print_parse_error("Invalid for loop", &SourceInfo::from_pair(&pair, path));
         return Node::Invalid;
     }
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();

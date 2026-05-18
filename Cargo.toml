@@ -2,7 +2,7 @@
 name = "crisp"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 keywords = ["compiler", "interpreter", "lisp", "programming-language"]
 categories = ["compilers", "parser-implementations"]
@@ -20,4 +20,4 @@ pest_derive = "2.8.4"
 
 [dev-dependencies]
 proptest = "1.4.0"
-proptest-derive = "0.4.0"
+proptest-derive = "0.8.0"
