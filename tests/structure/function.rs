@@ -1,5 +1,8 @@
 use crate::structure::helpers::*;
-use crisp::parsing::ast::{CrispParser, Rule, validation::validate_fn};
+use crisp::parsing::{
+    SourceFile,
+    ast::{CrispParser, Rule, validation::validate_fn},
+};
 use pest::Parser;
 use proptest::{prop_assert, proptest};
 
@@ -9,7 +12,7 @@ proptest! {
         let source = f.to_string();
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
-        prop_assert!(validate_fn(&pair, "test"));
+        prop_assert!(validate_fn(&pair, &SourceFile::default()));
     }
 
     #[test]
@@ -17,6 +20,6 @@ proptest! {
         let source = f.to_string();
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
-        prop_assert!(!validate_fn(&pair, "test"));
+        prop_assert!(!validate_fn(&pair, &SourceFile::default()));
     }
 }

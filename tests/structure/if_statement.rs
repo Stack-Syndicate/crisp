@@ -1,5 +1,8 @@
 use crate::structure::helpers::*;
-use crisp::parsing::ast::{CrispParser, Rule, validation::validate_if};
+use crisp::parsing::{
+    SourceFile,
+    ast::{CrispParser, Rule, validation::validate_if},
+};
 use pest::Parser;
 use proptest::{prop_assert, proptest};
 
@@ -9,13 +12,13 @@ proptest! {
         let source = format!("(if {} {} {})", predicate, then_block, else_block);
         let mut pairs = CrispParser::parse(Rule::list, &source).unwrap();
         let pair = pairs.next().unwrap();
-        prop_assert!(validate_if(&pair, ""));
+        prop_assert!(validate_if(&pair, &SourceFile::default()));
     }
     #[test]
     fn invalid(if_statement in gen_bad_if()) {
         let source = if_statement.to_string();
         let mut pairs = CrispParser::parse(Rule::file, &source).unwrap();
         let pair = pairs.next().unwrap();
-        prop_assert!(!validate_if(&pair, ""));
+        prop_assert!(!validate_if(&pair, &SourceFile::default()));
     }
 }

@@ -39,36 +39,14 @@ pub fn print_pest_error(err: Error<Rule>, path: &str, source: &str) {
     render_diagnostic(diag);
 }
 
-pub fn print_parse_error(msg: &str, info: &SourceInfo) {
-    let span = info.span;
-    let input = span.get_input();
-    let start = span.start();
-    let (line, line_start, column) = resolve_position(input, start);
-    let line_text = extract_line(input, line_start);
-    let span_len = (span.end() - span.start()).max(1);
+pub fn print_error(msg: &str, info: &SourceInfo) {
+    let start = info.start;
+    let (line, line_start, column) = resolve_position(&info.file.source, start);
+    let line_text = extract_line(&info.file.source, line_start);
+    let span_len = (info.end - info.start).max(1);
     let diag = Diagnostic {
         title: msg.to_string(),
-        path: info.path.to_string(),
-        line,
-        column,
-        line_text,
-        underline_start: info.col.saturating_sub(1),
-        underline_end: info.col.saturating_sub(1) + span_len,
-        hints: Vec::new(),
-    };
-    render_diagnostic(diag);
-}
-
-pub fn print_ast_error(msg: &str, info: &SourceInfo) {
-    let span = info.span;
-    let input = span.get_input();
-    let start = span.start();
-    let (line, line_start, column) = resolve_position(input, start);
-    let line_text = extract_line(input, line_start);
-    let span_len = (span.end() - span.start()).max(1);
-    let diag = Diagnostic {
-        title: msg.to_string(),
-        path: info.path.to_string(),
+        path: info.file.path.to_string(),
         line,
         column,
         line_text,
@@ -126,17 +104,19 @@ fn underline(line: &str, start: usize, end: usize) -> String {
 }
 
 fn resolve_position(source: &str, pos: usize) -> (usize, usize, usize) {
-    let line = source[..pos].chars().filter(|&c| c == '\n').count() + 1;
+    let pos = pos.min(source.len());
     let line_start = source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let line = source[..line_start].matches('\n').count() + 1;
     let column = pos - line_start + 1;
     (line, line_start, column)
 }
 
 fn extract_line(source: &str, start: usize) -> String {
-    source[start..]
-        .find('\n')
-        .map(|i| source[start..start + i].to_string())
-        .unwrap_or_else(|| source[start..].to_string())
+    let slice = &source[start..];
+    match slice.find('\n') {
+        Some(i) => slice[..i].to_string(),
+        None => slice.to_string(),
+    }
 }
 
 fn detect_common_parse_issues(source: &str) -> Vec<String> {

@@ -1,9 +1,16 @@
 #![feature(path_absolute_method)]
 
+use std::fs::File;
+use std::io::Read;
+
 use clap::Parser as CLIParser;
 use crisp::{
     cli::{Args, Command},
-    parsing::ast::parse_file as parse_file_to_ast,
+    parsing::{
+        SourceFile,
+        ast::parse_file as parse_file_to_ast,
+        rir::{ScopeStack, ast_to_scopes},
+    },
 };
 use log::{debug, error, info};
 
@@ -39,6 +46,19 @@ fn main() {
             }
         }
     }
+    let mut raw_source = String::new();
+    File::open(path)
+        .unwrap()
+        .read_to_string(&mut raw_source)
+        .expect("Could not read the file as source code");
+    let source = SourceFile {
+        path: path.to_string(),
+        source: raw_source,
+    };
     debug!("Parsing input");
-    let _parse_result = parse_file_to_ast(path);
+    let parse_result = parse_file_to_ast(source).expect("Pest to AST Parsing failed.");
+    // println!("{:?}", parse_result);
+    debug!("Doing scope pass");
+    let mut scope_stack = ScopeStack::new();
+    let _scopes_are_good = ast_to_scopes(&parse_result, &mut scope_stack);
 }
