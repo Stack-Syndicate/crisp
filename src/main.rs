@@ -57,7 +57,6 @@ fn main() {
     };
     debug!("Parsing input");
     let parse_result = parse_file_to_ast(source).expect("Pest to AST Parsing failed.");
-    println!("{:?}", parse_result);
     debug!("Doing scope pass");
     let mut scope_stack = ScopeStack::new();
     let _scopes_are_good = ast_to_scopes(&parse_result, &mut scope_stack);

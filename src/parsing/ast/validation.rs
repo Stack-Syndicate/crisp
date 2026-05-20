@@ -364,6 +364,7 @@ pub fn validate_list(pair: &Pair<Rule>, source: &SourceFile) -> bool {
             "Empty lists are not allowed",
             &SourceInfo::from_pair(pair, source),
         );
+        return false;
     }
     for inner_pair in pair.clone().into_inner() {
         match inner_pair.as_rule() {
