@@ -1,0 +1,11 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(let total (add (multiply 2 5) (subtract 10 3)))
+
+--- SUCCESS ---
+Block([
+	Let(total, Call(add, [Call(multiply, [Literal(U8(2)), Literal(U8(5))]), Call(subtract, [Literal(U8(10)), Literal(U8(3))])]))
+])

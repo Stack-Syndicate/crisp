@@ -1,0 +1,14 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(fn add (a:i32 b:i32) (ret 0))
+
+--- FAILURE ---
+Block([
+	Call(fn, [Identifier(add), Block([
+		Identifier(a:i32),
+		Identifier(b:i32)
+	]), Return(Literal(U8(0)))])
+])

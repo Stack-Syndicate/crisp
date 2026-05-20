@@ -1,0 +1,11 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(let    x      5)
+
+--- SUCCESS ---
+Block([
+	Let(x, Literal(U8(5)))
+])

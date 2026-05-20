@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use log::info;
-
 use crate::{diagnostics::print_error, parsing::ast::nodes::Node};
 pub type ScopeID = usize;
 pub type SymbolID = usize;
@@ -98,6 +96,7 @@ pub fn ast_to_scopes(node: &Node, scopes: &mut ScopeStack) -> bool {
     match node {
         Node::Fn {
             name,
+            return_type,
             params,
             body,
             info,

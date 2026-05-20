@@ -1,0 +1,11 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(let x)
+
+--- FAILURE ---
+Block([
+	Invalid
+])

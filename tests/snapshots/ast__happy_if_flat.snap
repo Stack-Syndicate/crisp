@@ -1,0 +1,15 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(if cond yes-flat None)
+
+--- SUCCESS ---
+Block([
+	If(
+		Identifier(cond),
+		Identifier(yes-flat),
+		Some(Identifier(None))
+	)
+])

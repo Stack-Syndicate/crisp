@@ -1,5 +1,4 @@
 use crate::{diagnostics::print_error, parsing::SourceFile};
-use log::debug;
 use pest::iterators::Pair;
 use std::collections::HashSet;
 
@@ -111,16 +110,16 @@ pub fn validate_if(pair: &Pair<Rule>, source: &SourceFile) -> bool {
         return false;
     }
     // then block must be list
-    if !matches!(pairs[2].as_rule(), Rule::list) {
+    if !matches!(pairs[2].as_rule(), Rule::list | Rule::symbol) {
         print_error(
-            "Then block must be a list",
+            "Then block must be a list or a symbol",
             &SourceInfo::from_pair(&pairs[2], source),
         );
         return false;
     }
-    if pairs.len() == 4 && !matches!(pairs[3].as_rule(), Rule::list) {
+    if pairs.len() == 4 && !matches!(pairs[3].as_rule(), Rule::list | Rule::symbol) {
         print_error(
-            "Invalid else block",
+            "Else block must be a list or a symbol",
             &SourceInfo::from_pair(&pairs[3], source),
         );
         return false;
@@ -204,6 +203,8 @@ pub fn validate_let(pair: &Pair<Rule>, source: &SourceFile) -> bool {
             &SourceInfo::from_pair(&pairs[2], source),
         );
         return false;
+    } else if matches!(pairs[2].as_rule(), Rule::list) {
+        return validate_list(&pairs[2], source);
     }
     true
 }
@@ -357,6 +358,12 @@ pub fn validate_list(pair: &Pair<Rule>, source: &SourceFile) -> bool {
             &SourceInfo::from_pair(pair, source),
         );
         return false;
+    }
+    if pair.clone().into_inner().is_empty() {
+        print_error(
+            "Empty lists are not allowed",
+            &SourceInfo::from_pair(pair, source),
+        );
     }
     for inner_pair in pair.clone().into_inner() {
         match inner_pair.as_rule() {

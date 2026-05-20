@@ -11,6 +11,15 @@ pub enum Literal {
     Number { literal: Number },
     Boolean(bool),
 }
+impl Literal {
+    pub fn to_test_string(&self) -> String {
+        match self {
+            Literal::String(s) => format!("String({:?})", s),
+            Literal::Number { literal } => literal.to_test_string(),
+            Literal::Boolean(b) => format!("Boolean({})", b),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Number {
@@ -71,6 +80,22 @@ impl FromStr for Number {
         core::panic!("Numeric literal out of range or invalid: {}", s);
     }
 }
+impl Number {
+    pub fn to_test_string(&self) -> String {
+        match self {
+            Number::F32(v) => format!("F32({})", v),
+            Number::F64(v) => format!("F64({})", v),
+            Number::I8(v) => format!("I8({})", v),
+            Number::I16(v) => format!("I16({})", v),
+            Number::I32(v) => format!("I32({})", v),
+            Number::I64(v) => format!("I64({})", v),
+            Number::U8(v) => format!("U8({})", v),
+            Number::U16(v) => format!("U16({})", v),
+            Number::U32(v) => format!("U32({})", v),
+            Number::U64(v) => format!("U64({})", v),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Symbol {
@@ -106,6 +131,23 @@ impl Symbol {
             Symbol::Typed { name, .. } => name.clone(),
         }
     }
+    pub fn get_annotation(&self) -> Option<String> {
+        match self {
+            Symbol::Untyped { .. } => None,
+            Symbol::Typed { annotation, .. } => {
+                Some(annotation.to_string().trim_start_matches(":").to_string())
+            }
+        }
+    }
+    pub fn to_test_string(&self) -> String {
+        match self {
+            Symbol::Typed { name, annotation } => {
+                let clean_type = annotation.trim_start_matches(':');
+                format!("{}:{}", name, clean_type)
+            }
+            Symbol::Untyped { name } => name.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +175,7 @@ impl SourceInfo {
 pub enum Node {
     Fn {
         name: Option<Symbol>,
+        return_type: Symbol,
         params: Vec<Symbol>,
         body: Box<Node>,
         info: SourceInfo,
@@ -213,6 +256,99 @@ impl Node {
             }
         }
     }
+    pub fn to_test_string(&self) -> String {
+        self.to_test_string_impl(0)
+    }
+    fn to_test_string_impl(&self, level: usize) -> String {
+        let indent = "\t".repeat(level);
+        let next_indent = "\t".repeat(level + 1);
+        match self {
+            Node::Literal { inner, .. } => format!("Literal({})", inner.to_test_string()),
+            Node::Identifier { symbol, .. } => format!("Identifier({})", symbol.to_test_string()),
+            Node::Let { symbol, value, .. } => {
+                format!(
+                    "Let({}, {})",
+                    symbol.to_test_string(),
+                    value.to_test_string_impl(level)
+                )
+            }
+            Node::Block { expressions, .. } => {
+                if expressions.is_empty() {
+                    return "Block([])".to_string();
+                }
+                let exprs: Vec<String> = expressions
+                    .iter()
+                    .map(|e| format!("{}{}", next_indent, e.to_test_string_impl(level + 1)))
+                    .collect();
+                format!("Block([\n{}\n{}])", exprs.join(",\n"), indent)
+            }
+            Node::If {
+                predicate, yes, no, ..
+            } => {
+                let no_str = match no {
+                    Some(no_node) => format!(
+                        ",\n{}Some({})",
+                        next_indent,
+                        no_node.to_test_string_impl(level + 1)
+                    ),
+                    None => format!(",\n{}None", next_indent),
+                };
+                format!(
+                    "If(\n{}{},\n{}{}{}\n{})",
+                    next_indent,
+                    predicate.to_test_string_impl(level + 1),
+                    next_indent,
+                    yes.to_test_string_impl(level + 1),
+                    no_str,
+                    indent
+                )
+            }
+            Node::Call { name, args, .. } => {
+                if args.is_empty() {
+                    return format!("Call({}, [])", name.to_test_string());
+                }
+                let args_str: Vec<String> =
+                    args.iter().map(|e| e.to_test_string_impl(level)).collect();
+                format!("Call({}, [{}])", name.to_test_string(), args_str.join(", "))
+            }
+            Node::Fn {
+                name,
+                return_type,
+                params,
+                body,
+                ..
+            } => {
+                let param_names: Vec<String> = params.iter().map(|p| p.get_name()).collect();
+                let param_types: Vec<Option<String>> =
+                    params.iter().map(|p| p.get_annotation()).collect();
+                let mut param_strings = Vec::new();
+                for (name, annotation) in param_names.iter().zip(param_types) {
+                    let mut param_string = String::new();
+                    param_string += format!("{} {}", name, annotation.unwrap()).as_str();
+                    param_strings.push(param_string);
+                }
+                let fn_name = match name {
+                    Some(symbol) => symbol.get_name(),
+                    None => "anon".to_string(),
+                };
+                format!(
+                    "Fn({}->{},\n{}Params([{}]),\n{}{}\n{})",
+                    fn_name,
+                    return_type.to_test_string(),
+                    next_indent,
+                    param_strings.join(", "),
+                    next_indent,
+                    body.to_test_string_impl(level + 1),
+                    indent
+                )
+            }
+            Node::Invalid => "Invalid".to_string(),
+            Node::Return { value, info } => {
+                format!("Return({})", value.to_test_string())
+            }
+            other => format!("{:?}", other),
+        }
+    }
 }
 
 fn parse_program(pair: Pair<Rule>, source: &SourceFile) -> Node {
@@ -233,7 +369,7 @@ fn parse_list(pair: Pair<Rule>, source: &SourceFile) -> Node {
     }
 
     let info = SourceInfo::from_pair(&pair, source);
-    let mut inner = pair.clone().into_inner();
+    let inner = pair.clone().into_inner();
     if inner.is_empty() {
         return Node::Block {
             expressions: vec![],
@@ -241,7 +377,9 @@ fn parse_list(pair: Pair<Rule>, source: &SourceFile) -> Node {
         };
     }
 
-    let first_element = inner.next().unwrap();
+    let mut special_form_inner = pair.clone().into_inner();
+    let first_element = special_form_inner.next().unwrap();
+
     if matches!(first_element.as_rule(), Rule::symbol) {
         let first_symbol = Symbol::from_pair(&first_element);
         if let Symbol::Typed {
@@ -268,19 +406,21 @@ fn parse_list(pair: Pair<Rule>, source: &SourceFile) -> Node {
     }
 
     let mut expressions = vec![];
-    for pair in inner.clone() {
-        expressions.push(Node::from_pair(pair, source));
+    for p in inner {
+        expressions.push(Node::from_pair(p, source));
     }
     Node::Block { expressions, info }
 }
-
 fn parse_fn(pair: Pair<Rule>, source: &SourceFile) -> Node {
     if !validate_fn(&pair, source) {
         return Node::Invalid;
     }
     let info = SourceInfo::from_pair(&pair, source);
     let mut pairs = pair.clone().into_inner().peekable();
-    pairs.next();
+    let fn_op = pairs.next().unwrap();
+    let return_type = Symbol::Untyped {
+        name: Symbol::from_pair(&fn_op).get_annotation().unwrap(),
+    };
     let mut name = None;
     if let Some(p) = pairs.peek()
         && p.as_rule() == Rule::symbol
@@ -303,10 +443,11 @@ fn parse_fn(pair: Pair<Rule>, source: &SourceFile) -> Node {
     if !validate_block(&body_pair, source) {
         return Node::Invalid;
     }
-    let body = Box::new(block_from_pairs(body_pair.into_inner(), source));
+    let body = Box::new(Node::from_pair(body_pair, source));
     trace!("Function definition detected");
     Node::Fn {
         name,
+        return_type,
         params,
         body,
         info,
@@ -320,18 +461,10 @@ fn parse_if(pair: Pair<Rule>, source: &SourceFile) -> Node {
     let info = SourceInfo::from_pair(&pair, source);
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let predicate = Box::new(Node::from_pair(pairs[1].clone(), source));
-    let yes = Box::new(block_from_pairs(pairs[2].clone().into_inner(), source));
-    let no = pairs.get(3).map(|pair| {
-        let info = SourceInfo::from_pair(pair, source);
-        Box::new(Node::Block {
-            expressions: pair
-                .clone()
-                .into_inner()
-                .map(|pair| Node::from_pair(pair, source))
-                .collect(),
-            info,
-        })
-    });
+    let yes = Box::new(Node::from_pair(pairs[2].clone(), source));
+    let no = pairs
+        .get(3)
+        .map(|pair| Box::new(Node::from_pair(pair.clone(), source)));
     trace!("If statement detected\n{}", pair.as_str());
     Node::If {
         predicate,
@@ -349,7 +482,7 @@ fn parse_let(pair: Pair<Rule>, source: &SourceFile) -> Node {
     let info = SourceInfo::from_pair(&pair, source);
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let symbol = Symbol::from_pair(&pairs[1]);
-    let value = Box::new(block_from_pairs(pairs[2].clone().into_inner(), source));
+    let value = Box::new(Node::from_pair(pairs[2].clone(), source));
     trace!("Let statement detected\n{}", pair.as_str());
     Node::Let {
         symbol,
@@ -366,8 +499,8 @@ fn parse_for(pair: Pair<Rule>, source: &SourceFile) -> Node {
     let info = SourceInfo::from_pair(&pair, source);
     let pairs: Vec<Pair<Rule>> = pair.clone().into_inner().collect();
     let dummy = Symbol::from_pair(&pairs[1]);
-    let iterator = Box::new(block_from_pairs(pairs[2].clone().into_inner(), source));
-    let body = Box::new(block_from_pairs(pairs[3].clone().into_inner(), source));
+    let iterator = Box::new(Node::from_pair(pairs[2].clone(), source));
+    let body = Box::new(Node::from_pair(pairs[3].clone(), source));
     trace!("For loop detected\n{}", pair.as_str());
     Node::For {
         dummy,
@@ -429,23 +562,4 @@ fn parse_call(pair: Pair<Rule>, source: &SourceFile) -> Node {
     let info = SourceInfo::from_pair(&pair, source);
     trace!("Function call detected\n{}", pair.as_str());
     Node::Call { name, args, info }
-}
-
-fn block_from_pairs<'a>(pairs: impl Iterator<Item = Pair<'a, Rule>>, source: &SourceFile) -> Node {
-    let mut pairs = pairs.peekable();
-    let info = if let Some(first_pair) = pairs.peek() {
-        SourceInfo::from_pair(first_pair, source)
-    } else {
-        SourceInfo {
-            line: 1,
-            col: 1,
-            start: 0,
-            end: 0,
-            file: std::sync::Arc::new(source.clone()),
-        }
-    };
-    Node::Block {
-        expressions: pairs.map(|p| Node::from_pair(p, source)).collect(),
-        info,
-    }
 }

@@ -1,0 +1,19 @@
+---
+source: tests/ast.rs
+expression: result
+---
+--- INPUT ---
+(if cond1 (if cond2 yes1 no2) no1)
+
+--- SUCCESS ---
+Block([
+	If(
+		Identifier(cond1),
+		If(
+			Identifier(cond2),
+			Identifier(yes1),
+			Some(Identifier(no2))
+		),
+		Some(Identifier(no1))
+	)
+])
