@@ -42,6 +42,7 @@ pub enum Expr {
         body: Box<Expr>,
     },
     Block(Vec<Expr>),
+    Error,
 }
 
 #[derive(Debug, Clone)]

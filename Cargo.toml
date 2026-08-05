@@ -2,7 +2,7 @@
 name = "crisp"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 keywords = ["compiler", "interpreter", "lisp", "programming-language"]
 categories = ["compilers", "parser-implementations"]
@@ -10,4 +10,5 @@ license = "MIT"
 repository = "https://codeberg.org/Stack-Syndicate/crisp"
 
 [dependencies]
+ariadne = { version = "0.6.0", features = ["auto-color"] }
 chumsky = "0.13.0"
