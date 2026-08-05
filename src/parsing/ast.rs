@@ -1,19 +1,3 @@
-/*
-* Variable definition:
-*   (def x 10)
-* Named function definition:
-*   (def f[x: int, y: int] -> int
-*       (...)
-*       (...)
-*       (...)
-*   )
-*   (def f (fn [x: int, y: int] -> int
-*       (...)
-*       (...)
-*       (...)
-*   ))
-* */
-
 #[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),

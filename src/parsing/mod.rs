@@ -35,8 +35,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                     .then(just('.'))
                     .then(text::digits(10).or_not())
                     .to_slice()
-                    .map(|s: &str| s.parse::<f32>().unwrap())
-                    .map(|f| Expr::Literal(Literal::Float32(f)));
+                    .map(|s: &str| Expr::Literal(Literal::Float32(s.parse::<f32>().unwrap())));
                 choice((float, integer))
             };
             choice((string, number))
@@ -122,7 +121,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                 .padded()
                 .ignore_then(expr.clone())
                 .then(expr.clone())
-                .delimited_by(just('(').padded(), just(")").padded())
+                .delimited_by(just('(').padded(), just(')').padded())
                 .map(|(condition, body)| Expr::Loop {
                     condition: Box::new(condition),
                     body: Box::new(body),
