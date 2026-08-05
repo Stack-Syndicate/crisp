@@ -1,5 +1,5 @@
 [package]
-name = "crisp"
+name = "crisp-runtime"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
 version = "0.4.0"
@@ -9,11 +9,4 @@ categories = ["compilers", "parser-implementations"]
 license = "MIT"
 repository = "https://codeberg.org/Stack-Syndicate/crisp"
 
-[workspace]
-resolver = "2"
-members = [".", "crisp-runtime"]
-
 [dependencies]
-ariadne = { version = "0.6.0" }
-chumsky = "0.13.0"
-crisp-runtime = { version = "0.4.0", path = "./crisp-runtime" }
