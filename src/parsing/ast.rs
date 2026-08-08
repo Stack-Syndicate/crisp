@@ -1,31 +1,31 @@
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub enum ParseExpr {
     Literal(Literal),
     Identifier(String),
     Def {
         name: String,
         type_annotation: Option<Type>,
-        value: Box<Expr>,
+        value: Box<ParseExpr>,
     },
     Fn {
         params: Vec<Param>,
         return_type: Type,
-        body: Box<Expr>,
+        body: Box<ParseExpr>,
     },
     Call {
-        callee: Box<Expr>,
-        args: Vec<Expr>,
+        callee: Box<ParseExpr>,
+        args: Vec<ParseExpr>,
     },
     If {
-        condition: Box<Expr>,
-        then_branch: Box<Expr>,
-        else_branch: Option<Box<Expr>>,
+        condition: Box<ParseExpr>,
+        then_branch: Box<ParseExpr>,
+        else_branch: Option<Box<ParseExpr>>,
     },
     Loop {
-        condition: Box<Expr>,
-        body: Box<Expr>,
+        condition: Box<ParseExpr>,
+        body: Box<ParseExpr>,
     },
-    Block(Vec<Expr>),
+    Block(Vec<ParseExpr>),
     Error,
 }
 

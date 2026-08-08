@@ -1,5 +1,5 @@
 [package]
-name = "crisp-runtime"
+name = "crisp-macro"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
 version = "0.4.2"
@@ -10,3 +10,4 @@ license = "MIT"
 repository = "https://codeberg.org/Stack-Syndicate/crisp"
 
 [dependencies]
+crisp = { version = "0.4.*", path = "../" }

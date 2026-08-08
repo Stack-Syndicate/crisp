@@ -1,11 +1,11 @@
 pub mod ast;
 pub mod error;
 
-use crate::parsing::ast::{Expr, Literal, Param, Type};
+use crate::parsing::ast::{Literal, Param, ParseExpr, Type};
 use chumsky::extra::Err;
 use chumsky::prelude::*;
 
-pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, char>>> {
+pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a, char>>> {
     // parse expressions
     let expr = recursive(|expr| {
         // reserved keywords
@@ -21,21 +21,21 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
             .map(String::from)
             .or(operator)
             .filter(move |s| !reserved.contains(&s.as_str()))
-            .map(Expr::Identifier); // text or numerical data typed in at comptime
+            .map(ParseExpr::Identifier); // text or numerical data typed in at comptime
         let literal = {
             let string = just('"')
                 .ignore_then(none_of("\"").repeated().collect::<String>())
                 .then_ignore(just('"'))
-                .map(|s| Expr::Literal(Literal::Str(s)));
+                .map(|s| ParseExpr::Literal(Literal::Str(s)));
             let number = {
                 let integer = text::digits(10)
                     .to_slice()
-                    .map(|s: &str| Expr::Literal(Literal::Int32(s.parse::<i32>().unwrap())));
+                    .map(|s: &str| ParseExpr::Literal(Literal::Int32(s.parse::<i32>().unwrap())));
                 let float = text::digits(10)
                     .then(just('.'))
                     .then(text::digits(10).or_not())
                     .to_slice()
-                    .map(|s: &str| Expr::Literal(Literal::Float32(s.parse::<f32>().unwrap())));
+                    .map(|s: &str| ParseExpr::Literal(Literal::Float32(s.parse::<f32>().unwrap())));
                 choice((float, integer))
             };
             choice((string, number))
@@ -66,7 +66,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                 .then(type_annotation.or_not())
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((name, type_annotation), value)| Expr::Def {
+                .map(|((name, type_annotation), value)| ParseExpr::Def {
                     name,
                     type_annotation,
                     value: Box::new(value),
@@ -95,7 +95,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                 .then(func_return_type.clone())
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((params, return_type), value)| Expr::Fn {
+                .map(|((params, return_type), value)| ParseExpr::Fn {
                     params,
                     return_type,
                     body: Box::new(value),
@@ -107,10 +107,10 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                 .then(func_return_type)
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(((name, params), return_type), value)| Expr::Def {
+                .map(|(((name, params), return_type), value)| ParseExpr::Def {
                     name,
                     type_annotation: None,
-                    value: Box::new(Expr::Fn {
+                    value: Box::new(ParseExpr::Fn {
                         params,
                         return_type,
                         body: Box::new(value),
@@ -122,7 +122,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
                 .ignore_then(expr.clone())
                 .then(expr.clone())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(condition, body)| Expr::Loop {
+                .map(|(condition, body)| ParseExpr::Loop {
                     condition: Box::new(condition),
                     body: Box::new(body),
                 });
@@ -134,14 +134,14 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<Expr>, Err<Rich<'a, cha
             .repeated()
             .collect::<Vec<_>>()
             .delimited_by(just('('), just(')'))
-            .map(Expr::Block);
+            .map(ParseExpr::Block);
         choice((special_forms, block, literal, identifier))
             .padded()
             .recover_with(via_parser(nested_delimiters(
                 '(',
                 ')',
                 [('[', ']')],
-                |_| Expr::Error,
+                |_| ParseExpr::Error,
             )))
     });
     expr.recover_with(skip_then_retry_until(any().ignored(), end()))
