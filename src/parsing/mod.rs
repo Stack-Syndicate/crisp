@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod error;
 
+use crate::parsing::ast::ParseExprKind;
 use crate::parsing::ast::{Literal, Param, ParseExpr, Type};
 use chumsky::extra::Err;
 use chumsky::prelude::*;
@@ -16,26 +17,29 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
         let operator = one_of("+-*/=<>!&|")
             .repeated()
             .at_least(1)
-            .collect::<String>(); // generic identifiers (function/variable names and the like)
+            .collect::<String>();
+        // generic identifiers (function/variable names and the like)
         let identifier = text::ident()
             .map(String::from)
             .or(operator)
             .filter(move |s| !reserved.contains(&s.as_str()))
-            .map(ParseExpr::Identifier); // text or numerical data typed in at comptime
+            .map(ParseExprKind::Identifier); // text or numerical data typed in at comptime
         let literal = {
             let string = just('"')
                 .ignore_then(none_of("\"").repeated().collect::<String>())
                 .then_ignore(just('"'))
-                .map(|s| ParseExpr::Literal(Literal::Str(s)));
+                .map(|s| ParseExprKind::Literal(Literal::Str(s)));
             let number = {
-                let integer = text::digits(10)
-                    .to_slice()
-                    .map(|s: &str| ParseExpr::Literal(Literal::Int32(s.parse::<i32>().unwrap())));
+                let integer = text::digits(10).to_slice().map(|s: &str| {
+                    ParseExprKind::Literal(Literal::Int32(s.parse::<i32>().unwrap()))
+                });
                 let float = text::digits(10)
                     .then(just('.'))
                     .then(text::digits(10).or_not())
                     .to_slice()
-                    .map(|s: &str| ParseExpr::Literal(Literal::Float32(s.parse::<f32>().unwrap())));
+                    .map(|s: &str| {
+                        ParseExprKind::Literal(Literal::Float32(s.parse::<f32>().unwrap()))
+                    });
                 choice((float, integer))
             };
             choice((string, number))
@@ -66,7 +70,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
                 .then(type_annotation.or_not())
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((name, type_annotation), value)| ParseExpr::Def {
+                .map(|((name, type_annotation), value)| ParseExprKind::Def {
                     name,
                     type_annotation,
                     value: Box::new(value),
@@ -95,7 +99,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
                 .then(func_return_type.clone())
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((params, return_type), value)| ParseExpr::Fn {
+                .map(|((params, return_type), value)| ParseExprKind::Fn {
                     params,
                     return_type,
                     body: Box::new(value),
@@ -107,14 +111,32 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
                 .then(func_return_type)
                 .then(expr.clone().padded())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(((name, params), return_type), value)| ParseExpr::Def {
-                    name,
-                    type_annotation: None,
-                    value: Box::new(ParseExpr::Fn {
-                        params,
-                        return_type,
-                        body: Box::new(value),
-                    }),
+                .map(|(((name, params), return_type), mut value)| {
+                    if let ParseExprKind::Block(ref mut inner) = value.kind
+                        && inner.len() == 1
+                        && matches!(
+                            inner.first(),
+                            Some(ParseExpr {
+                                kind: ParseExprKind::Block(_),
+                                ..
+                            })
+                        )
+                    {
+                        value = inner.remove(0);
+                    }
+                    ParseExprKind::Def {
+                        name,
+                        type_annotation: None,
+                        value: Box::new(ParseExpr {
+                            span: value.span,
+                            kind: ParseExprKind::Fn {
+                                params,
+                                return_type,
+                                body: Box::new(value),
+                            },
+                            id: None,
+                        }),
+                    }
                 });
             // while condition is true do body
             let while_loop = just("loop")
@@ -122,7 +144,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
                 .ignore_then(expr.clone())
                 .then(expr.clone())
                 .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(condition, body)| ParseExpr::Loop {
+                .map(|(condition, body)| ParseExprKind::Loop {
                     condition: Box::new(condition),
                     body: Box::new(body),
                 });
@@ -134,15 +156,14 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
             .repeated()
             .collect::<Vec<_>>()
             .delimited_by(just('('), just(')'))
-            .map(ParseExpr::Block);
+            .map(ParseExprKind::Block);
         choice((special_forms, block, literal, identifier))
             .padded()
-            .recover_with(via_parser(nested_delimiters(
-                '(',
-                ')',
-                [('[', ']')],
-                |_| ParseExpr::Error,
-            )))
+            .map_with(|kind, extra| ParseExpr {
+                kind,
+                span: extra.span(),
+                id: None,
+            })
     });
     expr.recover_with(skip_then_retry_until(any().ignored(), end()))
         .repeated()

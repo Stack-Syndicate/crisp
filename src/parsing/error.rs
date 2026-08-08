@@ -9,7 +9,7 @@ pub fn print_parse_errors(src: &str, errors: &[Rich<char>]) {
             .with_label(
                 Label::new(("src", span))
                     .with_message(format!("{}", err.reason()))
-                    .with_color(Color::Red),
+                    .with_color(Color::BrightBlue),
             )
             .finish()
             .eprint(("src", Source::from(src)))
