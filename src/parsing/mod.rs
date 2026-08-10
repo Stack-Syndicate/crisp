@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod error;
 
+use crate::OPERATORS;
 use crate::parsing::ast::ParseExprKind;
 use crate::parsing::ast::{Literal, Param, ParseExpr, Type};
 use chumsky::extra::Err;
@@ -14,10 +15,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
             "def", "defn", "fn", "i32", "i64", "f32", "f64", "u32", "u64", "bool", "loop",
         ];
         // built-in operators
-        let operator = one_of("+-*/=<>!&|")
-            .repeated()
-            .at_least(1)
-            .collect::<String>();
+        let operator = one_of(OPERATORS).repeated().at_least(1).collect::<String>();
         // generic identifiers (function/variable names and the like)
         let identifier = text::ident()
             .map(String::from)

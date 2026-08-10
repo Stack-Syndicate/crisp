@@ -7,7 +7,7 @@ use crisp::{
 fn main() {
     let crisp_txt = "\
         (defn foo[x: i32, y: i32] -> i32 (\
-            (+ 10 x)\
+            (+ 10 z)\
         ))";
     let (ast_opt, errors) = crip_parser().parse(crisp_txt).into_output_errors();
     if !errors.is_empty() {

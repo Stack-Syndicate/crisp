@@ -1,4 +1,7 @@
-use crate::parsing::ast::{ExprVisitor, Param, ParseExpr, Type};
+use crate::{
+    OPERATORS,
+    parsing::ast::{ExprVisitor, Param, ParseExpr, Type},
+};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,10 +25,12 @@ pub struct ScopeTree {
 impl ScopeTree {
     pub fn new() -> Self {
         let mut toplevel_scope = Scope::default();
-        toplevel_scope.symbols.insert(Symbol {
-            name: "+".to_string(),
-            type_annotation: None,
-        });
+        for c in OPERATORS.chars() {
+            toplevel_scope.symbols.insert(Symbol {
+                name: c.to_string(),
+                type_annotation: None,
+            });
+        }
         Self {
             scopes: vec![toplevel_scope],
         }

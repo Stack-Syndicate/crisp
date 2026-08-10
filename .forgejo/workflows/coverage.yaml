@@ -1,0 +1,23 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check-coverage:
+    runs-on: codeberg-tiny-lazy
+    container:
+      image: rust:slim-bookworm
+    steps:
+      - name: Install curl and node
+        run: |
+          apt-get update && apt-get install curl nodejs -y
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install llvm-cov
+        run: |
+          curl -sSL "https://github.com/taiki-e/cargo-llvm-cov/releases/latest/download/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C /usr/local/bin
+      - name: Verify minimum coverage
+        run: cargo llvm-cov --fail-under-lines 80
