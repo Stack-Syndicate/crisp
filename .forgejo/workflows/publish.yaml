@@ -12,6 +12,9 @@ jobs:
     container:
       image: rust:slim-bookworm
     steps:
+      - name: Install node
+        run: |
+          apt-get update && apt-get install nodejs -y
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Dependencies
@@ -23,7 +26,12 @@ jobs:
       - name: Run Test Suite
         run: |
           cargo test --workspace --all-targets
-      - name: Publish Package
+      - name: Publish to Codeberg
+        env:
+          CARGO_REGISTRIES_CODEBERG_INDEX: "sparse+https://codeberg.org/api/packages/${{ github.repository_owner }}/cargo/"
+          CARGO_REGISTRIES_CODEBERG_TOKEN: "Bearer ${{ secrets.CODEBERG_PACKAGES }}"
+        run: cargo publish --registry codeberg
+      - name: Publish to Crates.IO
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATESIO }}
         run: |
