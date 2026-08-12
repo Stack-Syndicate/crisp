@@ -88,6 +88,7 @@ pub fn init_project(path: &Path, progress: MultiProgress) -> Result<ProjectStruc
 
 pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStructure, Error> {
     let paths = ProjectStructure::paths(path.to_path_buf());
+    info!("{} {}", "[1/2]".bold().cyan(), "Reading Crisp.toml.".cyan());
     let toml: CrispToml = match toml::from_str(&fs::read_to_string(paths[0].0.inner())?) {
         Err(error) => {
             error!("Invalid Crisp.toml.");
@@ -99,41 +100,59 @@ pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStru
         }
     };
     let required_paths = match toml.project.r#type {
-        ProjectType::Bin | ProjectType::Lib => 3,
-        ProjectType::Both => 4,
+        ProjectType::Bin | ProjectType::Lib => paths.len() - 1,
+        ProjectType::Both => paths.len(),
     };
-    let progress_bar = progress.add(ProgressBar::new(required_paths));
+    let progress_bar = progress.add(ProgressBar::new(required_paths as u64).with_finish(
+        indicatif::ProgressFinish::WithMessage(
+            "project structure valid".green().to_string().into(),
+        ),
+    ));
     progress_bar.set_style(progress_bar_style());
-    progress_bar.set_message("Checking project structure.");
     progress_bar.inc(1);
-    info!("{:<5} {}", "Name:", toml.project.name.blue());
-    info!("{} {}", "Type:", toml.project.r#type.to_string().blue());
-    info!("{} {}", "Version:", toml.project.version.to_string().blue());
     info!(
-        "{} {}",
-        "Authors:",
+        "{:<8} {}",
+        "Name:".bold().magenta(),
+        toml.project.name.blue()
+    );
+    info!(
+        "{:<8} {}",
+        "Type:".bold().magenta(),
+        toml.project.r#type.to_string().blue()
+    );
+    info!(
+        "{:<8} {}",
+        "Version:".bold().magenta(),
+        toml.project.version.to_string().blue()
+    );
+    info!(
+        "{:<8} {}",
+        "Authors:".bold().magenta(),
         format!("{:?}", toml.project.authors).blue()
     );
-    for (path, file_name) in paths.iter().skip(1).clone() {
+    info!(
+        "{} {}",
+        "[2/2]".bold().cyan(),
+        "Checking project directory structure.".cyan()
+    );
+    for (path, file_name) in paths.iter().skip(1) {
         if !path.exists() {
             if (file_name == "src/lib.crisp" && toml.project.r#type == ProjectType::Bin)
                 || (file_name == "src/main.crisp" && toml.project.r#type == ProjectType::Lib)
             {
-                warn!("{:<15} {}", file_name, "not found".yellow())
+                warn!("{:<15} {}", file_name, "not found".yellow());
+                progress_bar.inc(1);
             } else {
                 error!("{:<15} {}", file_name, "not found".red());
-                progress_bar.set_message("project check failed".red().to_string());
+                progress_bar.finish_with_message("project check failed".red().to_string());
+                return Err(Error::msg("Project structure invalid"));
             }
         } else {
             trace!("{:<15} {}", file_name, "found".green());
             progress_bar.inc(1);
         }
     }
-    if progress_bar.is_finished() {
-        progress_bar.finish_and_clear();
-        info!("Project structure valid.");
-    }
-    progress.remove(&progress_bar);
+    // progress.remove(&progress_bar);
     Ok(ProjectStructure {
         main_file: paths[3].0.inner(),
         config: toml,
