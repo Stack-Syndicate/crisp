@@ -12,7 +12,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
     let expr = recursive(|expr| {
         // reserved keywords
         let reserved = [
-            "def", "defn", "fn", "i32", "i64", "f32", "f64", "u32", "u64", "bool", "loop",
+            "def", "defn", "fn", "i32", "i64", "f32", "f64", "u32", "u64", "bool", "loop", "void",
         ];
         // built-in operators
         let operator = one_of(OPERATORS).repeated().at_least(1).collect::<String>();
@@ -52,6 +52,7 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
             just("u64").to(Type::U64),
             just("bool").to(Type::Bool),
             just("str").to(Type::Str),
+            just("void").to(Type::Void),
         ));
         // specific type hint form (: i32)
         let type_annotation = just(':').padded().ignore_then(type_keyword.clone());

@@ -59,6 +59,7 @@ pub enum Type {
         return_type: Box<Type>,
     },
     Unit,
+    Void,
 }
 
 #[derive(Debug, Clone)]

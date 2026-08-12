@@ -1,10 +1,16 @@
+use anyhow::Error;
 use chumsky::Parser as ChumskyParser;
-use clap::builder::styling::{AnsiColor, Effects, Styles};
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser, Subcommand,
+    builder::styling::{AnsiColor, Effects, Styles},
+};
 use colored::Colorize;
-use crisp::parsing::error::print_parse_errors;
-use std::fs;
-use std::path::PathBuf;
+use crisp::{
+    logging::setup_logging,
+    parsing::error::print_parse_errors,
+    project::{check_project, init_project, new_project},
+};
+use std::{fs, path::PathBuf};
 
 fn help_styles() -> Styles {
     Styles::styled()
@@ -28,14 +34,29 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Start the REPL
     Repl,
+    /// Parse a single Crisp file
     Parse {
         #[arg(value_name = "FILE")]
         file: PathBuf,
     },
+    /// Create a new project in an existing directory
+    Init {
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+    },
+    /// Create a new project
+    New {
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+    },
+    /// Build project in current directory
+    Build,
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
+    let multi_progress = setup_logging();
     let cli = Cli::parse();
     match cli.command {
         Commands::Repl => {
@@ -67,5 +88,16 @@ fn main() {
                 std::process::exit(1);
             }
         },
+        Commands::Init { path } => {
+            init_project(&path);
+        }
+        Commands::New { path } => {
+            new_project(&path)?;
+        }
+        Commands::Build => {
+            let current_path = std::env::current_dir().expect("Cannot get current directory");
+            check_project(&current_path, multi_progress)?;
+        }
     }
+    Ok(())
 }
