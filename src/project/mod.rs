@@ -33,6 +33,7 @@ impl PathItem {
 
 pub struct ProjectStructure {
     main_file: PathBuf,
+    config: CrispToml,
 }
 impl ProjectStructure {
     fn paths(path: PathBuf) -> [(PathItem, String); 4] {
@@ -54,7 +55,7 @@ impl ProjectStructure {
     }
 }
 
-pub fn new_project(path: &Path) -> Result<ProjectStructure, Error> {
+pub fn new_project(path: &Path, progress: MultiProgress) -> Result<ProjectStructure, Error> {
     if let Ok(exists) = fs::exists(path) {
         if !exists {
             fs::create_dir(path).expect("Could not create project root directory");
@@ -62,11 +63,10 @@ pub fn new_project(path: &Path) -> Result<ProjectStructure, Error> {
     } else {
         panic!("Path may or may not exist: {:?}", path)
     }
-    Ok(init_project(path))
+    init_project(path, progress)
 }
 
-pub fn init_project(path: &Path) -> ProjectStructure {
-    let mut main_file_path = PathBuf::new();
+pub fn init_project(path: &Path, progress: MultiProgress) -> Result<ProjectStructure, Error> {
     let paths = ProjectStructure::paths(path.to_path_buf());
     for path in paths {
         if path.0.exists() {
@@ -78,15 +78,12 @@ pub fn init_project(path: &Path) -> ProjectStructure {
                 let mut contents = "";
                 if path.file_name() == Some("main.crisp".as_ref()) {
                     contents = "(defn main[] -> void (\n    (return \"hello world!\")\n))";
-                    main_file_path = path.clone();
                 }
                 fs::write(path, contents).expect("Could not create file");
             }
         }
     }
-    ProjectStructure {
-        main_file: main_file_path.clone().to_path_buf(),
-    }
+    check_project(path, progress)
 }
 
 pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStructure, Error> {
@@ -139,5 +136,6 @@ pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStru
     progress.remove(&progress_bar);
     Ok(ProjectStructure {
         main_file: paths[3].0.inner(),
+        config: toml,
     })
 }

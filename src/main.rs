@@ -89,10 +89,10 @@ fn main() -> Result<(), Error> {
             }
         },
         Commands::Init { path } => {
-            init_project(&path);
+            init_project(&path, multi_progress)?;
         }
         Commands::New { path } => {
-            new_project(&path)?;
+            new_project(&path, multi_progress)?;
         }
         Commands::Build => {
             let current_path = std::env::current_dir().expect("Cannot get current directory");
