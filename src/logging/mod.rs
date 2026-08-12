@@ -8,13 +8,13 @@ pub fn setup_logging() -> MultiProgress {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
             .format(|buf, record| {
                 let level = match record.level() {
-                    log::Level::Error => format!("{:>5}", "ERROR").red().bold().to_string(),
-                    log::Level::Warn => format!("{:>5}", "WARN").yellow().bold().to_string(),
-                    log::Level::Info => format!("{:>5}", "INFO").green().bold().to_string(),
-                    log::Level::Debug => format!("{:>5}", "DEBUG").cyan().bold().to_string(),
-                    log::Level::Trace => format!("{:>5}", "TRACE").magenta().bold().to_string(),
+                    log::Level::Error => format!("{:<3}", "|E|").red().bold().to_string(),
+                    log::Level::Warn => format!("{:<3}", "|W|").yellow().bold().to_string(),
+                    log::Level::Info => format!("{:<3}", "|I|").green().bold().to_string(),
+                    log::Level::Debug => format!("{:<3}", "|D|").cyan().bold().to_string(),
+                    log::Level::Trace => format!("{:<3}", "|T|").magenta().bold().to_string(),
                 };
-                writeln!(buf, "{} -> {}", level, record.args())
+                writeln!(buf, "{} {}", level, record.args())
             })
             .build();
     let level = logger.filter();

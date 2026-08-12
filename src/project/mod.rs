@@ -88,7 +88,7 @@ pub fn init_project(path: &Path, progress: MultiProgress) -> Result<ProjectStruc
 
 pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStructure, Error> {
     let paths = ProjectStructure::paths(path.to_path_buf());
-    info!("{} {}", "[1/2]".bold().cyan(), "Reading Crisp.toml.".cyan());
+    println!("{} {}", "[1/2]".bold().cyan(), "Reading Crisp.toml.".cyan());
     let toml: CrispToml = match toml::from_str(&fs::read_to_string(paths[0].0.inner())?) {
         Err(error) => {
             error!("Invalid Crisp.toml.");
@@ -109,32 +109,28 @@ pub fn check_project(path: &Path, progress: MultiProgress) -> Result<ProjectStru
         ),
     ));
     progress_bar.set_style(progress_bar_style());
-    progress_bar.inc(1);
-    info!(
-        "{:<8} {}",
+    println!(
+        "{}\n\
+    {:>8} {}\n\
+    {:>8} {}\n\
+    {:>8} {}\n\
+    {:>8} {}",
+        "Crisp Project Metadata".bold(),
         "Name:".bold().magenta(),
-        toml.project.name.blue()
-    );
-    info!(
-        "{:<8} {}",
+        toml.project.name.blue(),
         "Type:".bold().magenta(),
-        toml.project.r#type.to_string().blue()
-    );
-    info!(
-        "{:<8} {}",
+        toml.project.r#type.to_string().blue(),
         "Version:".bold().magenta(),
-        toml.project.version.to_string().blue()
-    );
-    info!(
-        "{:<8} {}",
+        toml.project.version.to_string().blue(),
         "Authors:".bold().magenta(),
-        format!("{:?}", toml.project.authors).blue()
+        format!("{:?}", toml.project.authors).blue(),
     );
-    info!(
+    println!(
         "{} {}",
         "[2/2]".bold().cyan(),
         "Checking project directory structure.".cyan()
     );
+    progress_bar.inc(1);
     for (path, file_name) in paths.iter().skip(1) {
         if !path.exists() {
             if (file_name == "src/lib.crisp" && toml.project.r#type == ProjectType::Bin)
