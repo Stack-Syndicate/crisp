@@ -31,3 +31,11 @@ pub fn progress_bar_style() -> ProgressStyle {
         .unwrap()
         .progress_chars("━━╸")
 }
+
+pub fn spinner_style() -> ProgressStyle {
+    ProgressStyle::with_template("{spinner:.yellow.bold} {msg} {pos:.bold}")
+        .unwrap()
+        .tick_strings(&[
+            "|⠋|", "|⠙|", "|⠹|", "|⠸|", "|⠼|", "|⠴|", "|⠦|", "|⠧|", "|⠇|", "|⠏|",
+        ])
+}
