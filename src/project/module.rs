@@ -1,12 +1,9 @@
 use anyhow::Error;
-use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar};
-use log::{info, warn};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use walkdir::WalkDir;
 
 use crate::logging::spinner_style;
 
@@ -15,98 +12,88 @@ pub struct ModuleTree {
 }
 impl ModuleTree {
     pub fn new(path: &Path, progress: MultiProgress) -> Result<Self, Error> {
-        info!("{}", "Building module tree".bold());
-        let mut modules = Vec::new();
         let spinner = progress.add(
             ProgressBar::new_spinner()
                 .with_style(spinner_style())
-                .with_message("Modules detected"),
+                .with_message("Modules discovered:"),
         );
-        if !path.join("Crisp.toml").exists() {
-            warn!("Module tree build started outside of project root");
+        let mut modules = Vec::new();
+        let mut root_module = Module::new(path.join("src/mod.crisp"));
+        root_module.name = "root".to_string();
+        root_module.source = fs::read_to_string(path.join("src/mod.crisp")).unwrap();
+        modules.push(root_module);
+        spinner.inc(1);
+        struct WorkItem {
+            parent_index: Option<usize>,
+            path: PathBuf,
         }
-        let src_dir = path.join("src");
-        if !src_dir.exists() {
-            return Err(Error::msg("Cannot build module tree without src directory"));
-        }
-        let main_path = path.join("src/main.crisp");
-        let lib_path = path.join("src/lib.crisp");
-        match (main_path.exists(), lib_path.exists()) {
-            (true, true) => {
-                let main_index = modules.len();
-                let main_module = Module::new(main_path.clone());
-                modules.push(main_module);
-                spinner.inc(1);
-                let lib_index = modules.len();
-                let lib_module = Module::new(lib_path.clone());
-                modules.push(lib_module);
-                spinner.inc(1);
-                modules[main_index].children.push(lib_index);
-                let main_source = fs::read_to_string(&main_path)?;
-                modules[main_index].source = main_source;
-                modules[main_index].name = "main.crisp".to_string();
-                let lib_source = fs::read_to_string(&lib_path)?;
-                modules[lib_index].source = lib_source;
-                modules[lib_index].name = "lib.crisp".to_string();
-            }
-            (true, false) => {
-                let main_index = modules.len();
-                let main_module = Module::new(main_path.clone());
-                spinner.inc(1);
-                modules.push(main_module);
-                let main_source = fs::read_to_string(&main_path)?;
-                modules[main_index].source = main_source;
-                modules[main_index].name = "main.crisp".to_string();
-            }
-            (false, true) => {
-                let lib_index = modules.len();
-                let lib_module = Module::new(lib_path.clone());
-                spinner.inc(1);
-                modules.push(lib_module);
-                let lib_source = fs::read_to_string(&lib_path)?;
-                modules[lib_index].source = lib_source;
-                modules[lib_index].name = "lib.crisp".to_string();
-            }
-            (false, false) => {
-                return Err(Error::msg("Cannot build module tree without lib/main file"));
-            }
-        }
-        let start_path = path.join("src");
-        for entry in WalkDir::new(start_path).into_iter().filter_map(Result::ok) {
-            if !entry.file_type().is_file()
-                || entry.path().extension().is_none_or(|ext| ext != "crisp")
-                || entry.path() == main_path
-                || entry.path() == lib_path
+        let mut workstack = vec![WorkItem {
+            path: path.to_path_buf().join("src/mod.crisp"),
+            parent_index: None,
+        }];
+        while let Some(workitem) = workstack.pop() {
+            let WorkItem {
+                parent_index,
+                path: current_path,
+            } = workitem;
+            if current_path.exists()
+                && current_path.is_file()
+                && let Some(file_name) = current_path.file_name()
+                && file_name == "mod.crisp"
             {
-                continue;
+                Self::scan_children_for_leaves(current_path.parent().unwrap())
+                    .iter()
+                    .for_each(|candidate| {
+                        let new_parent_index = modules.len();
+                        let (module_name, path) = if candidate.is_dir() {
+                            (
+                                candidate.file_name().unwrap().to_str().unwrap().to_string(),
+                                candidate.join("mod.crisp"),
+                            )
+                        } else {
+                            (
+                                candidate.file_stem().unwrap().to_str().unwrap().to_string(),
+                                candidate.to_path_buf(),
+                            )
+                        };
+                        workstack.push(WorkItem {
+                            parent_index: Some(new_parent_index),
+                            path: path.to_path_buf(),
+                        });
+                        let mut new_module = Module::new(path.to_path_buf());
+                        new_module.name = module_name.to_string();
+                        new_module.source = fs::read_to_string(path).unwrap();
+                        modules.push(new_module);
+                        spinner.inc(1);
+                        if let Some(parent_index) = parent_index {
+                            modules[parent_index].children.push(new_parent_index);
+                        }
+                    });
             }
-            let index = modules.len();
-            let mut module = Module::new(entry.path().to_path_buf());
-            let module_source = fs::read_to_string(entry.path())?;
-            module.source = module_source;
-            module.name = entry
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
-            let mut parent = entry.path().parent();
-            while let Some(dir) = parent {
-                let candidate = dir.with_extension("crisp");
-                if let Some(parent_index) =
-                    modules.iter().position(|module| module.path == candidate)
-                {
-                    modules[parent_index].children.push(index);
-                    break;
-                }
-                parent = dir.parent();
-            }
-            modules.push(module);
-            spinner.inc(1);
         }
-        info!("{} {}", "Module tree", "build successful".green().bold());
+        spinner.finish();
         Ok(Self { modules })
+    }
+    fn scan_children_for_leaves(path: &Path) -> Vec<PathBuf> {
+        let mut children = Vec::new();
+        for file in path.read_dir().unwrap() {
+            let file = file.unwrap();
+            let path = file.path();
+            if (path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension == "crisp")
+                && path.file_name() != Some("mod.crisp".as_ref()))
+                || (path.is_dir()
+                    && path
+                        .read_dir()
+                        .unwrap()
+                        .any(|file| file.unwrap().file_name() == "mod.crisp"))
+            {
+                children.push(path);
+            }
+        }
+        children
     }
 }
 

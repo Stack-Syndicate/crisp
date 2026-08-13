@@ -29,7 +29,6 @@ pub struct CrispToml {
 #[derive(Debug, Deserialize)]
 pub struct ProjectMetadata {
     pub name: String,
-    pub r#type: ProjectType,
     pub version: String,
     pub authors: Vec<String>,
 }
