@@ -15,10 +15,10 @@ Variables
 Functions
 
 ```crisp
-(def foo
+(def buzz
   (fn [name:str age:i32] -> str
     (+ name age)))
-(defn foo [name:str age:i32] -> str
+(defn buzz [name:str age:i32] -> str
   (+ name age))
 ```
 
@@ -37,12 +37,12 @@ Instantiation
 (def bar (Bar "wayburg" 5.0))
 ```
 
-Defining protocols ???
+Defining protocols
 
 ```crisp
 (defp Printable [
-  get_dist:fn->i32
-  get_addr:fn->str
+  get_dist->i32
+  get_addr->str
 ])
 (defn get_dist[bar:Bar]->i32 ())
 (defn get_addr[bar:Bar]->str ())
