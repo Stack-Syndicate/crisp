@@ -77,7 +77,7 @@ fn main() -> Result<(), Error> {
                 } else {
                     println!("{}", "No errors detected".green());
                 }
-                println!("{:#?}", crisp_parsed.0);
+                println!("{:?}", crisp_parsed.0);
             }
             Err(err) => {
                 eprintln!(

@@ -25,6 +25,8 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
             .map(String::from)
             .map(ParseExprKind::Identifier);
         let literal = {
+            let boolean = choice((just("true").to(true), just("false").to(false)))
+                .map(|b| ParseExprKind::Literal(Literal::Bool(b)));
             let string = just('"')
                 .ignore_then(none_of('"').repeated().collect::<String>())
                 .then_ignore(just('"'))
@@ -60,7 +62,7 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
                     });
                 choice((float, integer))
             };
-            choice((string, number))
+            choice((string, number, boolean))
         };
         let type_keyword = choice((
             just("i32").to(Type::I32),
