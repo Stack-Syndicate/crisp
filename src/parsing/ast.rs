@@ -11,6 +11,7 @@ pub struct ParseExpr {
 pub enum ParseExprKind {
     Literal(Literal),
     Identifier(String),
+    IdentifierAnnotated((String, Type)),
     Def {
         name: String,
         type_annotation: Option<Type>,
@@ -35,6 +36,9 @@ pub enum ParseExprKind {
         body: Box<ParseExpr>,
     },
     Block(Vec<ParseExpr>),
+    Map {
+        params: Vec<Param>,
+    },
     Error,
 }
 
@@ -60,6 +64,7 @@ pub enum Type {
     },
     Unit,
     Void,
+    Custom(String),
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +89,9 @@ pub trait ExprVisitor {
             ParseExprKind::Identifier(name) => {
                 self.visit_identifier(name, expr, scope_id);
             }
+            ParseExprKind::IdentifierAnnotated((name, _)) => {
+                self.visit_identifier(name, expr, scope_id);
+            }
             ParseExprKind::Def {
                 name,
                 type_annotation,
@@ -96,6 +104,9 @@ pub trait ExprVisitor {
             }
             ParseExprKind::Fn { params, body, .. } => {
                 self.visit_fn(params, body, expr, scope_id);
+            }
+            ParseExprKind::Map { params } => {
+                self.visit_map(params, expr, scope_id);
             }
             ParseExprKind::If {
                 condition,
@@ -122,6 +133,7 @@ pub trait ExprVisitor {
         }
     }
     fn visit_identifier(&mut self, _name: &str, _expr: &ParseExpr, _scope_id: usize) {}
+    fn visit_map(&mut self, _params: &[Param], _expr: &ParseExpr, _scope_id: usize) {}
     fn visit_def(
         &mut self,
         _name: &str,

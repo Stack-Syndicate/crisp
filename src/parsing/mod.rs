@@ -2,47 +2,66 @@ pub mod ast;
 pub mod error;
 
 use crate::OPERATORS;
-use crate::parsing::ast::ParseExprKind;
-use crate::parsing::ast::{Literal, Param, ParseExpr, Type};
-use chumsky::extra::Err;
-use chumsky::prelude::*;
+use crate::parsing::ast::{Literal, Param, ParseExpr, ParseExprKind, Type};
+use chumsky::{extra::Err, prelude::*};
 
-pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a, char>>> {
-    // parse expressions
+pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a, char>>> {
     let expr = recursive(|expr| {
-        // reserved keywords
-        let reserved = [
-            "def", "defn", "fn", "i32", "i64", "f32", "f64", "u32", "u64", "bool", "loop", "void",
-        ];
-        // built-in operators
-        let operator = one_of(OPERATORS).repeated().at_least(1).collect::<String>();
-        // generic identifiers (function/variable names and the like)
-        let identifier = text::ident()
+        let operator = one_of(OPERATORS)
             .map(String::from)
-            .or(operator)
-            .filter(move |s| !reserved.contains(&s.as_str()))
-            .map(ParseExprKind::Identifier); // text or numerical data typed in at comptime
+            .map(ParseExprKind::Identifier);
+        let identifier = text::ident()
+            .then(
+                just('-')
+                    .then(
+                        any()
+                            .filter(|c: &char| c.is_alphanumeric() || *c == '_')
+                            .repeated()
+                            .at_least(1),
+                    )
+                    .repeated(),
+            )
+            .to_slice()
+            .map(String::from)
+            .map(ParseExprKind::Identifier);
         let literal = {
             let string = just('"')
-                .ignore_then(none_of("\"").repeated().collect::<String>())
+                .ignore_then(none_of('"').repeated().collect::<String>())
                 .then_ignore(just('"'))
                 .map(|s| ParseExprKind::Literal(Literal::Str(s)));
             let number = {
-                let integer = text::digits(10).to_slice().map(|s: &str| {
-                    ParseExprKind::Literal(Literal::Int32(s.parse::<i32>().unwrap()))
-                });
-                let float = text::digits(10)
-                    .then(just('.'))
-                    .then(text::digits(10).or_not())
+                let integer = just('-')
+                    .or_not()
+                    .then(text::digits(10).at_least(1).to_slice())
                     .to_slice()
-                    .map(|s: &str| {
-                        ParseExprKind::Literal(Literal::Float32(s.parse::<f32>().unwrap()))
+                    .try_map(|s: &str, span| {
+                        if let Ok(value) = s.parse::<i32>() {
+                            Ok(ParseExprKind::Literal(Literal::Int32(value)))
+                        } else if let Ok(value) = s.parse::<i64>() {
+                            Ok(ParseExprKind::Literal(Literal::Int64(value)))
+                        } else {
+                            Err(Rich::custom(span, "integer literal is too large"))
+                        }
+                    });
+                let float = just('-')
+                    .or_not()
+                    .then(text::digits(10).at_least(1).to_slice())
+                    .then(just('.'))
+                    .then(text::digits(10).at_least(1).to_slice())
+                    .to_slice()
+                    .try_map(|s: &str, span| {
+                        if let Ok(value) = s.parse::<f32>() {
+                            Ok(ParseExprKind::Literal(Literal::Float32(value)))
+                        } else if let Ok(value) = s.parse::<f64>() {
+                            Ok(ParseExprKind::Literal(Literal::Float64(value)))
+                        } else {
+                            Err(Rich::custom(span, "float literal is too large"))
+                        }
                     });
                 choice((float, integer))
             };
             choice((string, number))
         };
-        // keywords referring to types (type hints etc)
         let type_keyword = choice((
             just("i32").to(Type::I32),
             just("i64").to(Type::I64),
@@ -53,118 +72,228 @@ pub fn crip_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a
             just("bool").to(Type::Bool),
             just("str").to(Type::Str),
             just("void").to(Type::Void),
+            identifier.map(|kind| match kind {
+                ParseExprKind::Identifier(name) => Type::Custom(name),
+                _ => unreachable!(),
+            }),
         ));
-        // specific type hint form (: i32)
-        let type_annotation = just(':').padded().ignore_then(type_keyword.clone());
-        // identifier with a type hint (abc: i32)
-        let typed_identifier = text::ident()
-            .map(String::from)
-            .then(type_annotation.clone());
-        // syntactic forms with specific functionality
-        let special_forms = {
-            // using the def keywords to define a new variable or function
-            let define = just("def")
+        let identifier_annotated = identifier
+            .then_ignore(just(':'))
+            .then(type_keyword.clone())
+            .try_map(|(ident, t), span| match ident {
+                ParseExprKind::Identifier(name) => {
+                    Ok(ParseExprKind::IdentifierAnnotated((name, t)))
+                }
+                _ => Err(Rich::custom(span, "invalid identifier")),
+            });
+        let special_form = {
+            let call = identifier
+                .or(operator)
                 .padded()
-                .ignore_then(text::ident().map(String::from))
-                .then(type_annotation.or_not())
-                .then(expr.clone().padded())
-                .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((name, type_annotation), value)| ParseExprKind::Def {
-                    name,
-                    type_annotation,
-                    value: Box::new(value),
+                .then(expr.clone().repeated().collect::<Vec<_>>())
+                .delimited_by(just('('), just(')'))
+                .try_map(|(name, args), span| {
+                    Ok(ParseExprKind::Call {
+                        callee: Box::new(ParseExpr {
+                            kind: name,
+                            span,
+                            id: None,
+                        }),
+                        args,
+                    })
                 });
-            // parameter list for functions; basically a bunch of annotated identifiers
-            let func_params = typed_identifier
+            let define_variable = text::keyword("def")
                 .padded()
-                .separated_by(just(',').padded())
-                .collect::<Vec<_>>()
-                .delimited_by(just('[').padded(), just(']').padded())
-                .map(|params| {
-                    params
+                .ignore_then(identifier_annotated.clone().or(identifier))
+                .padded()
+                .then(expr.clone())
+                .delimited_by(just('('), just(')'))
+                .try_map(|(ident, value), span| {
+                    let (name, type_annotation) = match ident {
+                        ParseExprKind::Identifier(name) => (name, None),
+                        ParseExprKind::IdentifierAnnotated((name, ty)) => (name, Some(ty)),
+                        _ => return Err(Rich::custom(span, "invalid identifier")),
+                    };
+
+                    Ok(ParseExprKind::Def {
+                        name,
+                        type_annotation,
+                        value: Box::new(value),
+                    })
+                });
+            let define_function = text::keyword("defn")
+                .padded()
+                .ignore_then(identifier)
+                .padded()
+                .then_ignore(just('['))
+                .then(
+                    identifier_annotated
+                        .clone()
+                        .padded()
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .padded()
+                .then_ignore(just(']'))
+                .padded()
+                .then(just("->").padded().ignore_then(type_keyword.clone()))
+                .then(expr.clone().repeated().collect::<Vec<_>>())
+                .delimited_by(just('('), just(')'))
+                .try_map(|(((name, params), return_type), body), span| {
+                    Ok(ParseExprKind::Def {
+                        name: match name {
+                            ParseExprKind::Identifier(name) => name,
+                            _ => return Err(Rich::custom(span, "invalid identifier")),
+                        },
+                        type_annotation: None,
+                        value: Box::new(ParseExpr {
+                            kind: ParseExprKind::Fn {
+                                params: params
+                                    .iter()
+                                    .map(|param| {
+                                        if let ParseExprKind::IdentifierAnnotated((
+                                            name,
+                                            type_annotation,
+                                        )) = param
+                                        {
+                                            Param {
+                                                name: name.clone(),
+                                                type_annotation: type_annotation.clone(),
+                                            }
+                                        } else {
+                                            panic!("parser broke")
+                                        }
+                                    })
+                                    .collect::<Vec<_>>(),
+                                return_type,
+                                body: Box::new(ParseExpr {
+                                    kind: ParseExprKind::Block(
+                                        body.iter().map(|expr| (*expr).clone()).collect::<Vec<_>>(),
+                                    ),
+                                    span,
+                                    id: None,
+                                }),
+                            },
+                            id: None,
+                            span,
+                        }),
+                    })
+                });
+            let define_map = text::keyword("defm")
+                .padded()
+                .ignore_then(identifier)
+                .padded()
+                .then(
+                    identifier_annotated
+                        .clone()
+                        .padded()
+                        .repeated()
+                        .collect::<Vec<_>>()
+                        .delimited_by(just('[').padded(), just(']').padded()),
+                )
+                .delimited_by(just('(').padded(), just(')').padded())
+                .try_map(|(name, params), span| {
+                    let name = match name {
+                        ParseExprKind::Identifier(name) => name,
+                        _ => return Err(Rich::custom(span, "invalid identifier")),
+                    };
+                    let params = params
                         .into_iter()
-                        .map(|(name, type_annotation)| Param {
-                            name,
-                            type_annotation,
+                        .map(|param| match param {
+                            ParseExprKind::IdentifierAnnotated((name, type_annotation)) => {
+                                Ok(Param {
+                                    name,
+                                    type_annotation,
+                                })
+                            }
+                            _ => Err(Rich::custom(span, "invalid annotated identifier")),
                         })
-                        .collect::<Vec<Param>>()
-                });
-            // function return type, self explanatory
-            let func_return_type = just("->").padded().ignore_then(type_keyword.clone());
-            // annoymous function definitions
-            let func = just("fn")
-                .padded()
-                .ignore_then(func_params.clone())
-                .then(func_return_type.clone())
-                .then(expr.clone().padded())
-                .delimited_by(just('(').padded(), just(')').padded())
-                .map(|((params, return_type), value)| ParseExprKind::Fn {
-                    params,
-                    return_type,
-                    body: Box::new(value),
-                });
-            let named_func = just("defn")
-                .padded()
-                .ignore_then(text::ident().map(String::from))
-                .then(func_params)
-                .then(func_return_type)
-                .then(expr.clone().padded())
-                .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(((name, params), return_type), mut value)| {
-                    if let ParseExprKind::Block(ref mut inner) = value.kind
-                        && inner.len() == 1
-                        && matches!(
-                            inner.first(),
-                            Some(ParseExpr {
-                                kind: ParseExprKind::Block(_),
-                                ..
-                            })
-                        )
-                    {
-                        value = inner.remove(0);
-                    }
-                    ParseExprKind::Def {
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(ParseExprKind::Def {
                         name,
                         type_annotation: None,
                         value: Box::new(ParseExpr {
-                            span: value.span,
-                            kind: ParseExprKind::Fn {
-                                params,
-                                return_type,
-                                body: Box::new(value),
-                            },
+                            kind: ParseExprKind::Map { params },
+                            id: None,
+                            span,
+                        }),
+                    })
+                });
+            let anonymous_function = text::keyword("fn")
+                .padded()
+                .ignore_then(just('['))
+                .ignore_then(
+                    identifier_annotated
+                        .clone()
+                        .padded()
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .padded()
+                .then_ignore(just(']'))
+                .padded()
+                .then(just("->").padded().ignore_then(type_keyword.clone()))
+                .then(expr.clone().repeated().collect::<Vec<_>>())
+                .delimited_by(just('('), just(')'))
+                .try_map(|((params, return_type), body), span| {
+                    Ok(ParseExprKind::Fn {
+                        params: params
+                            .iter()
+                            .map(|param| {
+                                if let ParseExprKind::IdentifierAnnotated((name, type_annotation)) =
+                                    param
+                                {
+                                    Param {
+                                        name: name.clone(),
+                                        type_annotation: type_annotation.clone(),
+                                    }
+                                } else {
+                                    panic!("parser broke")
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                        return_type,
+                        body: Box::new(ParseExpr {
+                            kind: ParseExprKind::Block(
+                                body.iter().map(|expr| (*expr).clone()).collect::<Vec<_>>(),
+                            ),
+                            span,
                             id: None,
                         }),
-                    }
+                    })
                 });
-            // while condition is true do body
-            let while_loop = just("loop")
-                .padded()
-                .ignore_then(expr.clone())
-                .then(expr.clone())
-                .delimited_by(just('(').padded(), just(')').padded())
-                .map(|(condition, body)| ParseExprKind::Loop {
-                    condition: Box::new(condition),
-                    body: Box::new(body),
-                });
-            choice((define, named_func, func, while_loop))
+
+            choice((
+                define_variable,
+                define_function,
+                define_map,
+                anonymous_function,
+                call,
+            ))
         };
-        // creation of a new scope; important for certain special forms
-        let block = expr
-            .clone()
-            .repeated()
-            .collect::<Vec<_>>()
-            .delimited_by(just('('), just(')'))
-            .map(ParseExprKind::Block);
-        choice((special_forms, block, literal, identifier))
-            .padded()
-            .map_with(|kind, extra| ParseExpr {
-                kind,
-                span: extra.span(),
-                id: None,
-            })
+        choice((
+            special_form,
+            literal,
+            identifier_annotated,
+            identifier,
+            operator,
+        ))
+        .padded()
+        .map_with(|kind, extra| ParseExpr {
+            kind,
+            span: extra.span(),
+            id: None,
+        })
     });
-    expr.recover_with(skip_then_retry_until(any().ignored(), end()))
-        .repeated()
-        .collect()
+    expr.recover_with(chumsky::recovery::via_parser(
+        chumsky::recovery::nested_delimiters('(', ')', [('[', ']'), ('{', '}')], |span| {
+            ParseExpr {
+                kind: ParseExprKind::Identifier(String::from("parse_error")),
+                span,
+                id: None,
+            }
+        }),
+    ))
+    .repeated()
+    .collect()
 }

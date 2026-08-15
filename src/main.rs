@@ -69,14 +69,15 @@ fn main() -> Result<(), Error> {
                     "Loaded file:".cyan(),
                     file.display().to_string().yellow()
                 );
-                let crisp_parsed = crisp::parsing::crip_parser()
+                let crisp_parsed = crisp::parsing::crisp_parser()
                     .parse(&source)
                     .into_output_errors();
                 if !crisp_parsed.1.is_empty() {
-                    print_parse_errors(&source, &crisp_parsed.1);
+                    print_parse_errors(&source, &crisp_parsed.1[0..1]);
                 } else {
                     println!("{}", "No errors detected".green());
                 }
+                println!("{:#?}", crisp_parsed.0);
             }
             Err(err) => {
                 eprintln!(
