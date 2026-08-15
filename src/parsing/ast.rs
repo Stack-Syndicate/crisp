@@ -73,6 +73,7 @@ pub enum Type {
     Option(Box<Type>),
     Result(Box<Type>),
     Protocol(Box<Type>),
+    Code,
     Custom(String),
 }
 
@@ -87,6 +88,7 @@ pub enum Literal {
     Str(String),
     Bool(bool),
     Map(HashMap<String, ParseExpr>),
+    Quote(Box<ParseExpr>),
     Unit,
 }
 

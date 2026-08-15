@@ -35,7 +35,7 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
                 .repeated()
                 .collect::<Vec<_>>(),
         )
-        .try_map(|(first, rest), span| {
+        .map(|(first, rest)| {
             let mut parts = vec![ParseExpr {
                 kind: first.inner.clone(),
                 span: first.span,
@@ -46,7 +46,7 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
                 span: member.span,
                 id: None,
             }));
-            Ok(ParseExprKind::MemberAccess(parts))
+            ParseExprKind::MemberAccess(parts)
         })
 }
 
@@ -133,6 +133,17 @@ where
         })
 }
 
+fn quote_literal<'a, P>(
+    expr: P,
+) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+where
+    P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
+{
+    just('#')
+        .ignore_then(expr)
+        .map(|expr| ParseExprKind::Literal(Literal::Quote(Box::new(expr))))
+}
+
 fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + Clone {
     recursive(|ty| {
         let primitive = choice((
@@ -145,6 +156,7 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
             text::keyword("bool").to(Type::Bool),
             text::keyword("str").to(Type::Str),
             text::keyword("void").to(Type::Void),
+            text::keyword("code").to(Type::Code),
             identifier().map(|kind| match kind {
                 ParseExprKind::Identifier(name) => Type::Custom(name),
                 _ => unreachable!(),
@@ -210,10 +222,13 @@ fn call<'a, P>(expr: P) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, 
 where
     P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
 {
-    expr.clone()
-        .padded()
-        .then(expr.repeated().collect::<Vec<_>>())
-        .delimited_by(just('('), just(')'))
+    just('(')
+        .ignore_then(
+            expr.clone()
+                .padded()
+                .then(expr.clone().padded().repeated().collect::<Vec<_>>()),
+        )
+        .then_ignore(just(')'))
         .map(|(callee, args)| ParseExprKind::Call {
             callee: Box::new(callee),
             args,
@@ -275,7 +290,6 @@ where
                 ParseExprKind::Identifier(name) => name,
                 _ => return Err(Rich::custom(span, "invalid identifier")),
             };
-
             let params = params
                 .into_iter()
                 .map(|param| match param {
@@ -286,7 +300,6 @@ where
                     _ => panic!("parser broke"),
                 })
                 .collect::<Vec<_>>();
-
             Ok(ParseExprKind::Def {
                 name,
                 type_annotation: None,
@@ -436,14 +449,14 @@ where
 
 pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a, char>>> {
     let expr = recursive(|expr| {
-        let operator = operator();
-        let identifier = identifier();
-        let boolean = boolean();
-        let string = string();
         let number = choice((float(), integer()));
-        let map_literal = map_literal(expr.clone());
-        let literal = choice((map_literal, string, number, boolean));
-        let identifier_annotated = identifier_annotated();
+        let literal = choice((
+            quote_literal(expr.clone()),
+            map_literal(expr.clone()),
+            string(),
+            number,
+            boolean(),
+        ));
         let call = call(expr.clone());
         let define_variable = define_variable(expr.clone());
         let define_function = define_function(expr.clone());
@@ -456,15 +469,15 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
             define_map,
             define_protocol,
             anonymous_function,
-            call,
         ));
         choice((
             special_form,
+            call,
             member_access(),
             literal,
-            identifier_annotated,
-            identifier,
-            operator,
+            identifier_annotated(),
+            identifier(),
+            operator(),
         ))
         .padded()
         .map_with(|kind, extra| ParseExpr {
