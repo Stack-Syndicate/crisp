@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chumsky::span::SimpleSpan;
 
 #[derive(Debug, Clone)]
@@ -39,10 +41,13 @@ pub enum ParseExprKind {
     Map {
         params: Vec<Param>,
     },
+    Protocol {
+        params: Vec<Param>,
+    },
     Error,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Param {
     pub name: String,
     pub type_annotation: Type,
@@ -59,11 +64,14 @@ pub enum Type {
     Str,
     Bool,
     Function {
-        params: Vec<Type>,
+        params: Vec<Param>,
         return_type: Box<Type>,
     },
     Unit,
     Void,
+    Option(Box<Type>),
+    Result(Box<Type>),
+    Protocol(Box<Type>),
     Custom(String),
 }
 
@@ -77,6 +85,7 @@ pub enum Literal {
     Float64(f64),
     Str(String),
     Bool(bool),
+    Map(HashMap<String, ParseExpr>),
     Unit,
 }
 
@@ -108,6 +117,9 @@ pub trait ExprVisitor {
             ParseExprKind::Map { params } => {
                 self.visit_map(params, expr, scope_id);
             }
+            ParseExprKind::Protocol { params } => {
+                self.visit_protocol(params, expr, scope_id);
+            }
             ParseExprKind::If {
                 condition,
                 then_branch,
@@ -134,6 +146,7 @@ pub trait ExprVisitor {
     }
     fn visit_identifier(&mut self, _name: &str, _expr: &ParseExpr, _scope_id: usize) {}
     fn visit_map(&mut self, _params: &[Param], _expr: &ParseExpr, _scope_id: usize) {}
+    fn visit_protocol(&mut self, _params: &[Param], _expr: &ParseExpr, _scope_id: usize) {}
     fn visit_def(
         &mut self,
         _name: &str,

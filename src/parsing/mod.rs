@@ -1,6 +1,8 @@
 pub mod ast;
 pub mod error;
 
+use std::collections::HashMap;
+
 use crate::OPERATORS;
 use crate::parsing::ast::{Literal, Param, ParseExpr, ParseExprKind, Type};
 use chumsky::{extra::Err, prelude::*};
@@ -12,8 +14,12 @@ fn operator<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>
 }
 
 fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    let ident_part = any()
+        .filter(|c: &char| c.is_alphanumeric() || *c == '_')
+        .repeated()
+        .at_least(1);
     text::ident()
-        .then(just('-').then(text::ident()).repeated())
+        .then(just('-').then(ident_part).repeated())
         .to_slice()
         .map(String::from)
         .map(ParseExprKind::Identifier)
@@ -64,39 +70,127 @@ fn float<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> +
         })
 }
 
+fn string<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    just('"')
+        .ignore_then(none_of('"').repeated().collect::<String>())
+        .then_ignore(just('"'))
+        .map(|s| ParseExprKind::Literal(Literal::Str(s)))
+}
+
+fn boolean<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    choice((just("true").to(true), just("false").to(false)))
+        .map(|b| ParseExprKind::Literal(Literal::Bool(b)))
+}
+
+fn map_literal<'a, P>(
+    expr: P,
+) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+where
+    P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
+{
+    just(':')
+        .ignore_then(identifier())
+        .padded()
+        .then(expr.clone())
+        .padded()
+        .repeated()
+        .collect::<Vec<_>>()
+        .delimited_by(just('{'), just('}'))
+        .try_map(|entries, span| {
+            let mut map = HashMap::new();
+            for (key, value) in entries {
+                let ParseExprKind::Identifier(name) = key else {
+                    return Err(Rich::custom(span, "invalid map key"));
+                };
+                map.insert(name, value);
+            }
+            Ok(ParseExprKind::Literal(Literal::Map(map)))
+        })
+}
+
 fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + Clone {
-    choice((
-        just("i32").to(Type::I32),
-        just("i64").to(Type::I64),
-        just("f32").to(Type::F32),
-        just("f64").to(Type::F64),
-        just("u32").to(Type::U32),
-        just("u64").to(Type::U64),
-        just("bool").to(Type::Bool),
-        just("str").to(Type::Str),
-        just("void").to(Type::Void),
-        identifier().map(|kind| match kind {
-            ParseExprKind::Identifier(name) => Type::Custom(name),
-            _ => unreachable!(),
-        }),
-    ))
+    recursive(|ty| {
+        let primitive = choice((
+            text::keyword("i32").to(Type::I32),
+            text::keyword("i64").to(Type::I64),
+            text::keyword("f32").to(Type::F32),
+            text::keyword("f64").to(Type::F64),
+            text::keyword("u32").to(Type::U32),
+            text::keyword("u64").to(Type::U64),
+            text::keyword("bool").to(Type::Bool),
+            text::keyword("str").to(Type::Str),
+            text::keyword("void").to(Type::Void),
+            identifier().map(|kind| match kind {
+                ParseExprKind::Identifier(name) => Type::Custom(name),
+                _ => unreachable!(),
+            }),
+        ));
+
+        let function = text::keyword("fn")
+            .padded()
+            .ignore_then(
+                just('[')
+                    .padded()
+                    .ignore_then(
+                        identifier()
+                            .try_map(|ident, span| match ident {
+                                ParseExprKind::Identifier(name) => Ok(name),
+                                _ => Err(Rich::custom(span, "invalid parameter name")),
+                            })
+                            .padded()
+                            .then_ignore(just(':'))
+                            .padded()
+                            .then(ty.clone())
+                            .repeated()
+                            .collect::<Vec<_>>(),
+                    )
+                    .then_ignore(just(']').padded()),
+            )
+            .then_ignore(just("->").padded())
+            .then(ty.clone())
+            .delimited_by(just('('), just(')'))
+            .map(|(params, return_type)| Type::Function {
+                params: params
+                    .into_iter()
+                    .map(|(name, ty)| Param {
+                        name,
+                        type_annotation: ty,
+                    })
+                    .collect(),
+                return_type: Box::new(return_type),
+            });
+        let protocol = just('@')
+            .ignore_then(identifier())
+            .try_map(|kind, span| match kind {
+                ParseExprKind::Identifier(name) => Ok(Type::Protocol(Box::new(Type::Custom(name)))),
+                _ => Err(Rich::custom(span, "invalid protocol type keyword")),
+            });
+        let option = just('?')
+            .ignore_then(identifier())
+            .try_map(|kind, span| match kind {
+                ParseExprKind::Identifier(name) => Ok(Type::Option(Box::new(Type::Custom(name)))),
+                _ => Err(Rich::custom(span, "invalid option type keyword")),
+            });
+        let result = just('!')
+            .ignore_then(identifier())
+            .try_map(|kind, span| match kind {
+                ParseExprKind::Identifier(name) => Ok(Type::Result(Box::new(Type::Custom(name)))),
+                _ => Err(Rich::custom(span, "invalid result type keyword")),
+            });
+        choice((function, protocol, option, result, primitive))
+    })
 }
 
 fn call<'a, P>(expr: P) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
     P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
 {
-    identifier()
-        .or(operator())
+    expr.clone()
         .padded()
         .then(expr.repeated().collect::<Vec<_>>())
         .delimited_by(just('('), just(')'))
-        .map_with(|(name, args), extra| ParseExprKind::Call {
-            callee: Box::new(ParseExpr {
-                kind: name,
-                span: extra.span(),
-                id: None,
-            }),
+        .map(|(callee, args)| ParseExprKind::Call {
+            callee: Box::new(callee),
             args,
         })
 }
@@ -230,6 +324,46 @@ fn define_map<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char
         })
 }
 
+fn define_protocol<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    text::keyword("defp")
+        .padded()
+        .ignore_then(identifier())
+        .padded()
+        .then(
+            identifier_annotated()
+                .padded()
+                .repeated()
+                .collect::<Vec<_>>()
+                .delimited_by(just('[').padded(), just(']').padded()),
+        )
+        .delimited_by(just('(').padded(), just(')').padded())
+        .try_map(|(name, params), span| {
+            let ParseExprKind::Identifier(name) = name else {
+                return Err(Rich::custom(span, "invalid protocol name"));
+            };
+
+            let params = params
+                .into_iter()
+                .map(|param| match param {
+                    ParseExprKind::IdentifierAnnotated((name, ty)) => Ok(Param {
+                        name,
+                        type_annotation: ty,
+                    }),
+                    _ => Err(Rich::custom(span, "invalid parameter")),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(ParseExprKind::Def {
+                name,
+                type_annotation: None,
+                value: Box::new(ParseExpr {
+                    kind: ParseExprKind::Protocol { params },
+                    span,
+                    id: None,
+                }),
+            })
+        })
+}
 fn anonymous_function<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
@@ -279,24 +413,23 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
     let expr = recursive(|expr| {
         let operator = operator();
         let identifier = identifier();
-        let boolean = choice((just("true").to(true), just("false").to(false)))
-            .map(|b| ParseExprKind::Literal(Literal::Bool(b)));
-        let string = just('"')
-            .ignore_then(none_of('"').repeated().collect::<String>())
-            .then_ignore(just('"'))
-            .map(|s| ParseExprKind::Literal(Literal::Str(s)));
+        let boolean = boolean();
+        let string = string();
         let number = choice((float(), integer()));
-        let literal = choice((string, number, boolean));
+        let map_literal = map_literal(expr.clone());
+        let literal = choice((map_literal, string, number, boolean));
         let identifier_annotated = identifier_annotated();
         let call = call(expr.clone());
         let define_variable = define_variable(expr.clone());
         let define_function = define_function(expr.clone());
         let define_map = define_map();
+        let define_protocol = define_protocol();
         let anonymous_function = anonymous_function(expr.clone());
         let special_form = choice((
             define_variable,
             define_function,
             define_map,
+            define_protocol,
             anonymous_function,
             call,
         ));

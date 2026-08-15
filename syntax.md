@@ -40,10 +40,11 @@ Instantiation
 Defining protocols
 
 ```crisp
-(defp Printable [
-  get_dist->i32
-  get_addr->str
-])
-(defn get_dist[bar:Bar]->i32 ())
-(defn get_addr[bar:Bar]->str ())
+(defp Printable [name:str, dist:i32])
+(defn get_dist[p:@Printable]->i32
+  (p.dist)
+)
+(defn get_addr[p:@Printable]->str
+  (p.name)
+)
 ```
