@@ -25,6 +25,31 @@ fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char
         .map(ParseExprKind::Identifier)
 }
 
+fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    identifier()
+        .spanned()
+        .then(
+            just('/')
+                .ignore_then(identifier())
+                .spanned()
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .try_map(|(first, rest), span| {
+            let mut parts = vec![ParseExpr {
+                kind: first.inner.clone(),
+                span: first.span,
+                id: None,
+            }];
+            parts.extend(rest.iter().map(|member| ParseExpr {
+                kind: member.inner.clone(),
+                span: member.span,
+                id: None,
+            }));
+            Ok(ParseExprKind::MemberAccess(parts))
+        })
+}
+
 fn identifier_annotated<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 {
     identifier()
@@ -435,6 +460,7 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
         ));
         choice((
             special_form,
+            member_access(),
             literal,
             identifier_annotated,
             identifier,

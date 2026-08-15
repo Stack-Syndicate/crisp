@@ -14,6 +14,7 @@ pub enum ParseExprKind {
     Literal(Literal),
     Identifier(String),
     IdentifierAnnotated((String, Type)),
+    MemberAccess(Vec<ParseExpr>),
     Def {
         name: String,
         type_annotation: Option<Type>,
@@ -100,6 +101,11 @@ pub trait ExprVisitor {
             }
             ParseExprKind::IdentifierAnnotated((name, _)) => {
                 self.visit_identifier(name, expr, scope_id);
+            }
+            ParseExprKind::MemberAccess(parts) => {
+                for part in parts {
+                    self.visit_expr(part, scope_id);
+                }
             }
             ParseExprKind::Def {
                 name,
