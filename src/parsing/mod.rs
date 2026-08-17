@@ -3,7 +3,8 @@ pub mod error;
 
 use std::collections::HashMap;
 
-use crate::OPERATORS;
+use crate::consts::*;
+
 use crate::parsing::ast::{Literal, Param, ParseExpr, ParseExprKind, Type};
 use chumsky::{extra::Err, prelude::*};
 
@@ -29,7 +30,7 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
     identifier()
         .spanned()
         .then(
-            just('/')
+            just(MEMBER_ACCESS_SEPARATOR)
                 .ignore_then(identifier())
                 .spanned()
                 .repeated()
@@ -139,7 +140,7 @@ fn quote_literal<'a, P>(
 where
     P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
 {
-    just('#')
+    just(QUOTE_MODIFIER)
         .ignore_then(expr)
         .map(|expr| ParseExprKind::Literal(Literal::Quote(Box::new(expr))))
 }
@@ -183,7 +184,7 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
                     )
                     .then_ignore(just(']').padded()),
             )
-            .then_ignore(just("->").padded())
+            .then_ignore(just(RETURN_TYPE_STRING).padded())
             .then(ty.clone())
             .delimited_by(just('('), just(')'))
             .map(|(params, return_type)| Type::Function {
@@ -196,24 +197,30 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
                     .collect(),
                 return_type: Box::new(return_type),
             });
-        let protocol = just('@')
+        let protocol = just(PROTOCOL_MODIFIER)
             .ignore_then(identifier())
             .try_map(|kind, span| match kind {
                 ParseExprKind::Identifier(name) => Ok(Type::Protocol(Box::new(Type::Custom(name)))),
                 _ => Err(Rich::custom(span, "invalid protocol type keyword")),
             });
-        let option = just('?')
-            .ignore_then(identifier())
-            .try_map(|kind, span| match kind {
-                ParseExprKind::Identifier(name) => Ok(Type::Option(Box::new(Type::Custom(name)))),
-                _ => Err(Rich::custom(span, "invalid option type keyword")),
-            });
-        let result = just('!')
-            .ignore_then(identifier())
-            .try_map(|kind, span| match kind {
-                ParseExprKind::Identifier(name) => Ok(Type::Result(Box::new(Type::Custom(name)))),
-                _ => Err(Rich::custom(span, "invalid result type keyword")),
-            });
+        let option =
+            just(OPTION_MODIFIER)
+                .ignore_then(identifier())
+                .try_map(|kind, span| match kind {
+                    ParseExprKind::Identifier(name) => {
+                        Ok(Type::Option(Box::new(Type::Custom(name))))
+                    }
+                    _ => Err(Rich::custom(span, "invalid option type keyword")),
+                });
+        let result =
+            just(RESULT_MODIFIER)
+                .ignore_then(identifier())
+                .try_map(|kind, span| match kind {
+                    ParseExprKind::Identifier(name) => {
+                        Ok(Type::Result(Box::new(Type::Custom(name))))
+                    }
+                    _ => Err(Rich::custom(span, "invalid result type keyword")),
+                });
         choice((function, protocol, option, result, primitive))
     })
 }
@@ -282,7 +289,11 @@ where
         .padded()
         .then_ignore(just(']'))
         .padded()
-        .then(just("->").padded().ignore_then(type_keyword()))
+        .then(
+            just(RETURN_TYPE_STRING)
+                .padded()
+                .ignore_then(type_keyword()),
+        )
         .then(expr.repeated().collect::<Vec<_>>())
         .delimited_by(just('('), just(')'))
         .try_map(|(((name, params), return_type), body), span| {
@@ -362,7 +373,12 @@ fn define_map<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char
         })
 }
 
-fn define_protocol<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+fn define_protocol<'a, P>(
+    expr: P,
+) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+where
+    P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
+{
     text::keyword("defp")
         .padded()
         .ignore_then(identifier())
@@ -374,8 +390,14 @@ fn define_protocol<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a,
                 .collect::<Vec<_>>()
                 .delimited_by(just('[').padded(), just(']').padded()),
         )
+        .then(
+            define_function(expr.clone())
+                .padded()
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
         .delimited_by(just('(').padded(), just(')').padded())
-        .try_map(|(name, params), span| {
+        .try_map(|((name, params), fns), span| {
             let ParseExprKind::Identifier(name) = name else {
                 return Err(Rich::custom(span, "invalid protocol name"));
             };
@@ -390,12 +412,21 @@ fn define_protocol<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a,
                     _ => Err(Rich::custom(span, "invalid parameter")),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-
             Ok(ParseExprKind::Def {
                 name,
                 type_annotation: None,
                 value: Box::new(ParseExpr {
-                    kind: ParseExprKind::Protocol { params },
+                    kind: ParseExprKind::Protocol {
+                        params,
+                        fns: fns
+                            .iter()
+                            .map(|f| ParseExpr {
+                                kind: f.clone(),
+                                span,
+                                id: None,
+                            })
+                            .collect(),
+                    },
                     span,
                     id: None,
                 }),
@@ -420,7 +451,11 @@ where
         .padded()
         .then_ignore(just(']'))
         .padded()
-        .then(just("->").padded().ignore_then(type_keyword()))
+        .then(
+            just(RETURN_TYPE_STRING)
+                .padded()
+                .ignore_then(type_keyword()),
+        )
         .then(expr.repeated().collect::<Vec<_>>())
         .delimited_by(just('('), just(')'))
         .try_map(|((params, return_type), body), span| {
@@ -461,7 +496,7 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
         let define_variable = define_variable(expr.clone());
         let define_function = define_function(expr.clone());
         let define_map = define_map();
-        let define_protocol = define_protocol();
+        let define_protocol = define_protocol(expr.clone());
         let anonymous_function = anonymous_function(expr.clone());
         let special_form = choice((
             define_variable,

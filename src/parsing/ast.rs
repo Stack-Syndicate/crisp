@@ -44,6 +44,7 @@ pub enum ParseExprKind {
     },
     Protocol {
         params: Vec<Param>,
+        fns: Vec<ParseExpr>,
     },
     Error,
 }
@@ -125,8 +126,11 @@ pub trait ExprVisitor {
             ParseExprKind::Map { params } => {
                 self.visit_map(params, expr, scope_id);
             }
-            ParseExprKind::Protocol { params } => {
+            ParseExprKind::Protocol { params, fns } => {
                 self.visit_protocol(params, expr, scope_id);
+                for f in fns {
+                    self.visit_expr(f, scope_id);
+                }
             }
             ParseExprKind::If {
                 condition,
