@@ -1,12 +1,10 @@
 pub mod ast;
 pub mod error;
 
-use std::collections::HashMap;
-
 use crate::consts::*;
-
 use crate::parsing::ast::{Literal, Param, ParseExpr, ParseExprKind, Type};
 use chumsky::{extra::Err, prelude::*};
+use std::collections::HashMap;
 
 fn operator<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     one_of(OPERATORS)
@@ -14,7 +12,7 @@ fn operator<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>
         .map(ParseExprKind::Identifier)
 }
 
-fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+fn identifier_raw<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     let ident_part = any()
         .filter(|c: &char| c.is_alphanumeric() || *c == '_')
         .repeated()
@@ -26,12 +24,41 @@ fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char
         .map(ParseExprKind::Identifier)
 }
 
+fn identifier_annotated<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+{
+    identifier_raw()
+        .then_ignore(just(':'))
+        .then(type_keyword())
+        .try_map(|(ident, ty), span| match ident {
+            ParseExprKind::Identifier(name) => Ok(ParseExprKind::IdentifierAnnotated((name, ty))),
+            _ => Err(Rich::custom(span, "invalid identifier")),
+        })
+}
+
+fn identifier_placeholder<'a>()
+-> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    just(PLACEHOLDER_MODIFIER)
+        .ignore_then(identifier_raw())
+        .try_map(|ident, span| match ident {
+            ParseExprKind::Identifier(name) => Ok(ParseExprKind::IdentifierPlaceholder(name)),
+            _ => Err(Rich::custom(span, "invalid identifier placeholder")),
+        })
+}
+
+fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+    choice((
+        identifier_raw(),
+        identifier_annotated(),
+        identifier_placeholder(),
+    ))
+}
+
 fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
-    identifier()
+    identifier_raw()
         .spanned()
         .then(
             just(MEMBER_ACCESS_SEPARATOR)
-                .ignore_then(identifier())
+                .ignore_then(identifier_raw())
                 .spanned()
                 .repeated()
                 .collect::<Vec<_>>(),
@@ -48,17 +75,6 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
                 id: None,
             }));
             ParseExprKind::MemberAccess(parts)
-        })
-}
-
-fn identifier_annotated<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
-{
-    identifier()
-        .then_ignore(just(':'))
-        .then(type_keyword())
-        .try_map(|(ident, ty), span| match ident {
-            ParseExprKind::Identifier(name) => Ok(ParseExprKind::IdentifierAnnotated((name, ty))),
-            _ => Err(Rich::custom(span, "invalid identifier")),
         })
 }
 
@@ -158,7 +174,7 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
             text::keyword("str").to(Type::Str),
             text::keyword("void").to(Type::Void),
             text::keyword("code").to(Type::Code),
-            identifier().map(|kind| match kind {
+            identifier_raw().map(|kind| match kind {
                 ParseExprKind::Identifier(name) => Type::Custom(name),
                 _ => unreachable!(),
             }),
@@ -170,11 +186,7 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
                 just('[')
                     .padded()
                     .ignore_then(
-                        identifier()
-                            .try_map(|ident, span| match ident {
-                                ParseExprKind::Identifier(name) => Ok(name),
-                                _ => Err(Rich::custom(span, "invalid parameter name")),
-                            })
+                        identifier_raw()
                             .padded()
                             .then_ignore(just(':'))
                             .padded()
@@ -190,37 +202,37 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
             .map(|(params, return_type)| Type::Function {
                 params: params
                     .into_iter()
-                    .map(|(name, ty)| Param {
-                        name,
-                        type_annotation: ty,
+                    .map(|(name, ty)| {
+                        let ParseExprKind::Identifier(name) = name else {
+                            unreachable!()
+                        };
+
+                        Param {
+                            name,
+                            type_annotation: ty,
+                        }
                     })
                     .collect(),
                 return_type: Box::new(return_type),
             });
         let protocol = just(PROTOCOL_MODIFIER)
-            .ignore_then(identifier())
+            .ignore_then(identifier_raw())
             .try_map(|kind, span| match kind {
                 ParseExprKind::Identifier(name) => Ok(Type::Protocol(Box::new(Type::Custom(name)))),
                 _ => Err(Rich::custom(span, "invalid protocol type keyword")),
             });
-        let option =
-            just(OPTION_MODIFIER)
-                .ignore_then(identifier())
-                .try_map(|kind, span| match kind {
-                    ParseExprKind::Identifier(name) => {
-                        Ok(Type::Option(Box::new(Type::Custom(name))))
-                    }
-                    _ => Err(Rich::custom(span, "invalid option type keyword")),
-                });
-        let result =
-            just(RESULT_MODIFIER)
-                .ignore_then(identifier())
-                .try_map(|kind, span| match kind {
-                    ParseExprKind::Identifier(name) => {
-                        Ok(Type::Result(Box::new(Type::Custom(name))))
-                    }
-                    _ => Err(Rich::custom(span, "invalid result type keyword")),
-                });
+        let option = just(OPTION_MODIFIER)
+            .ignore_then(identifier_raw())
+            .try_map(|kind, span| match kind {
+                ParseExprKind::Identifier(name) => Ok(Type::Option(Box::new(Type::Custom(name)))),
+                _ => Err(Rich::custom(span, "invalid option type keyword")),
+            });
+        let result = just(RESULT_MODIFIER)
+            .ignore_then(identifier_raw())
+            .try_map(|kind, span| match kind {
+                ParseExprKind::Identifier(name) => Ok(Type::Result(Box::new(Type::Custom(name)))),
+                _ => Err(Rich::custom(span, "invalid result type keyword")),
+            });
         choice((function, protocol, option, result, primitive))
     })
 }
@@ -484,32 +496,20 @@ where
 
 pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'a, char>>> {
     let expr = recursive(|expr| {
-        let number = choice((float(), integer()));
-        let literal = choice((
+        choice((
+            define_variable(expr.clone()),
+            define_function(expr.clone()),
+            define_map(),
+            define_protocol(expr.clone()),
+            anonymous_function(expr.clone()),
+            call(expr.clone()),
+            member_access(),
             quote_literal(expr.clone()),
             map_literal(expr.clone()),
             string(),
-            number,
+            float(),
+            integer(),
             boolean(),
-        ));
-        let call = call(expr.clone());
-        let define_variable = define_variable(expr.clone());
-        let define_function = define_function(expr.clone());
-        let define_map = define_map();
-        let define_protocol = define_protocol(expr.clone());
-        let anonymous_function = anonymous_function(expr.clone());
-        let special_form = choice((
-            define_variable,
-            define_function,
-            define_map,
-            define_protocol,
-            anonymous_function,
-        ));
-        choice((
-            special_form,
-            call,
-            member_access(),
-            literal,
             identifier_annotated(),
             identifier(),
             operator(),

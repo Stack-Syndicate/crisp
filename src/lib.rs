@@ -14,6 +14,7 @@ pub mod consts {
     pub const QUOTE_MODIFIER: char = '#';
     pub const PROTOCOL_MODIFIER: char = '@';
     pub const REFERENCE_MODIFIER: char = '&';
+    pub const PLACEHOLDER_MODIFIER: char = '$';
 
     pub const MEMBER_ACCESS_SEPARATOR: char = '/';
     pub const RETURN_TYPE_STRING: &str = ">";
