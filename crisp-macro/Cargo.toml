@@ -2,7 +2,7 @@
 name = "crisp-macro"
 authors = ["Glenn Wallace <glennw-coding@proton.me>"]
 description = "A small, expressive Lisp-inspired programming language."
-version = "0.4.5"
+version = "0.5.0"
 edition = "2024"
 keywords = ["compiler", "interpreter", "lisp", "programming-language"]
 categories = ["compilers", "parser-implementations"]
@@ -10,4 +10,4 @@ license = "MIT"
 repository = "https://codeberg.org/Stack-Syndicate/crisp"
 
 [dependencies]
-crisp = { version = "0.4.*", path = "../" }
+crisp = { version = "0.5.0", path = "../" }

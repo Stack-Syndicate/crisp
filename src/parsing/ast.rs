@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chumsky::span::SimpleSpan;
 
 #[derive(Debug, Clone)]
@@ -11,6 +13,8 @@ pub struct ParseExpr {
 pub enum ParseExprKind {
     Literal(Literal),
     Identifier(String),
+    IdentifierAnnotated((String, Type)),
+    MemberAccess(Vec<ParseExpr>),
     Def {
         name: String,
         type_annotation: Option<Type>,
@@ -35,10 +39,17 @@ pub enum ParseExprKind {
         body: Box<ParseExpr>,
     },
     Block(Vec<ParseExpr>),
+    Map {
+        params: Vec<Param>,
+    },
+    Protocol {
+        params: Vec<Param>,
+        fns: Vec<ParseExpr>,
+    },
     Error,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Param {
     pub name: String,
     pub type_annotation: Type,
@@ -55,10 +66,16 @@ pub enum Type {
     Str,
     Bool,
     Function {
-        params: Vec<Type>,
+        params: Vec<Param>,
         return_type: Box<Type>,
     },
     Unit,
+    Void,
+    Option(Box<Type>),
+    Result(Box<Type>),
+    Protocol(Box<Type>),
+    Code,
+    Custom(String),
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +88,8 @@ pub enum Literal {
     Float64(f64),
     Str(String),
     Bool(bool),
+    Map(HashMap<String, ParseExpr>),
+    Quote(Box<ParseExpr>),
     Unit,
 }
 
@@ -82,6 +101,14 @@ pub trait ExprVisitor {
         match &expr.kind {
             ParseExprKind::Identifier(name) => {
                 self.visit_identifier(name, expr, scope_id);
+            }
+            ParseExprKind::IdentifierAnnotated((name, _)) => {
+                self.visit_identifier(name, expr, scope_id);
+            }
+            ParseExprKind::MemberAccess(parts) => {
+                for part in parts {
+                    self.visit_expr(part, scope_id);
+                }
             }
             ParseExprKind::Def {
                 name,
@@ -95,6 +122,15 @@ pub trait ExprVisitor {
             }
             ParseExprKind::Fn { params, body, .. } => {
                 self.visit_fn(params, body, expr, scope_id);
+            }
+            ParseExprKind::Map { params } => {
+                self.visit_map(params, expr, scope_id);
+            }
+            ParseExprKind::Protocol { params, fns } => {
+                self.visit_protocol(params, expr, scope_id);
+                for f in fns {
+                    self.visit_expr(f, scope_id);
+                }
             }
             ParseExprKind::If {
                 condition,
@@ -121,6 +157,8 @@ pub trait ExprVisitor {
         }
     }
     fn visit_identifier(&mut self, _name: &str, _expr: &ParseExpr, _scope_id: usize) {}
+    fn visit_map(&mut self, _params: &[Param], _expr: &ParseExpr, _scope_id: usize) {}
+    fn visit_protocol(&mut self, _params: &[Param], _expr: &ParseExpr, _scope_id: usize) {}
     fn visit_def(
         &mut self,
         _name: &str,
