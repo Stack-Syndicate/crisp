@@ -6,13 +6,14 @@ use crate::parsing::ast::{Literal, Param, ParseExpr, ParseExprKind, Type};
 use chumsky::{extra::Err, prelude::*};
 use std::collections::HashMap;
 
-fn operator<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn operator<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     one_of(OPERATORS)
         .map(String::from)
         .map(ParseExprKind::Identifier)
 }
 
-fn identifier_raw<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn identifier_raw<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+{
     let ident_part = any()
         .filter(|c: &char| c.is_alphanumeric() || *c == '_')
         .repeated()
@@ -24,8 +25,8 @@ fn identifier_raw<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, 
         .map(ParseExprKind::Identifier)
 }
 
-fn identifier_annotated<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
-{
+pub fn identifier_annotated<'a>()
+-> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     identifier_raw()
         .then_ignore(just(':'))
         .then(type_keyword())
@@ -35,7 +36,7 @@ fn identifier_annotated<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Ric
         })
 }
 
-fn identifier_placeholder<'a>()
+pub fn identifier_placeholder<'a>()
 -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     just(PLACEHOLDER_MODIFIER)
         .ignore_then(identifier_raw())
@@ -45,15 +46,15 @@ fn identifier_placeholder<'a>()
         })
 }
 
-fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn identifier<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     choice((
-        identifier_raw(),
-        identifier_annotated(),
         identifier_placeholder(),
+        identifier_annotated(),
+        identifier_raw(),
     ))
 }
 
-fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     identifier_raw()
         .spanned()
         .then(
@@ -61,6 +62,7 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
                 .ignore_then(identifier_raw())
                 .spanned()
                 .repeated()
+                .at_least(1)
                 .collect::<Vec<_>>(),
         )
         .map(|(first, rest)| {
@@ -78,7 +80,7 @@ fn member_access<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, c
         })
 }
 
-fn integer<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn integer<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     just('-')
         .or_not()
         .then(text::digits(10).at_least(1).to_slice())
@@ -94,7 +96,7 @@ fn integer<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>>
         })
 }
 
-fn float<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn float<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     just('-')
         .or_not()
         .then(text::digits(10).at_least(1).to_slice())
@@ -102,29 +104,29 @@ fn float<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> +
         .then(text::digits(10).at_least(1).to_slice())
         .to_slice()
         .try_map(|s: &str, span| {
-            if let Ok(value) = s.parse::<f32>() {
-                Ok(ParseExprKind::Literal(Literal::Float32(value)))
-            } else if let Ok(value) = s.parse::<f64>() {
+            if let Ok(value) = s.parse::<f64>() {
                 Ok(ParseExprKind::Literal(Literal::Float64(value)))
+            } else if let Ok(value) = s.parse::<f32>() {
+                Ok(ParseExprKind::Literal(Literal::Float32(value)))
             } else {
-                Err(Rich::custom(span, "float literal is too large"))
+                Err(Rich::custom(span, "float literal is out of range"))
             }
         })
 }
 
-fn string<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn string<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     just('"')
         .ignore_then(none_of('"').repeated().collect::<String>())
         .then_ignore(just('"'))
         .map(|s| ParseExprKind::Literal(Literal::Str(s)))
 }
 
-fn boolean<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn boolean<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     choice((just("true").to(true), just("false").to(false)))
         .map(|b| ParseExprKind::Literal(Literal::Bool(b)))
 }
 
-fn map_literal<'a, P>(
+pub fn map_literal<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -150,7 +152,7 @@ where
         })
 }
 
-fn quote_literal<'a, P>(
+pub fn quote_literal<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -161,7 +163,7 @@ where
         .map(|expr| ParseExprKind::Literal(Literal::Quote(Box::new(expr))))
 }
 
-fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + Clone {
+pub fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + Clone {
     recursive(|ty| {
         let primitive = choice((
             text::keyword("i32").to(Type::I32),
@@ -215,29 +217,23 @@ fn type_keyword<'a>() -> impl Parser<'a, &'a str, Type, Err<Rich<'a, char>>> + C
                     .collect(),
                 return_type: Box::new(return_type),
             });
+
         let protocol = just(PROTOCOL_MODIFIER)
-            .ignore_then(identifier_raw())
-            .try_map(|kind, span| match kind {
-                ParseExprKind::Identifier(name) => Ok(Type::Protocol(Box::new(Type::Custom(name)))),
-                _ => Err(Rich::custom(span, "invalid protocol type keyword")),
-            });
+            .ignore_then(ty.clone())
+            .map(|inner| Type::Protocol(Box::new(inner)));
+
         let option = just(OPTION_MODIFIER)
-            .ignore_then(identifier_raw())
-            .try_map(|kind, span| match kind {
-                ParseExprKind::Identifier(name) => Ok(Type::Option(Box::new(Type::Custom(name)))),
-                _ => Err(Rich::custom(span, "invalid option type keyword")),
-            });
+            .ignore_then(ty.clone())
+            .map(|inner| Type::Option(Box::new(inner)));
+
         let result = just(RESULT_MODIFIER)
-            .ignore_then(identifier_raw())
-            .try_map(|kind, span| match kind {
-                ParseExprKind::Identifier(name) => Ok(Type::Result(Box::new(Type::Custom(name)))),
-                _ => Err(Rich::custom(span, "invalid result type keyword")),
-            });
+            .ignore_then(ty.clone())
+            .map(|inner| Type::Result(Box::new(inner)));
+
         choice((function, protocol, option, result, primitive))
     })
 }
-
-fn call<'a, P>(expr: P) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
+pub fn call<'a, P>(expr: P) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
     P: Parser<'a, &'a str, ParseExpr, Err<Rich<'a, char>>> + Clone,
 {
@@ -254,7 +250,7 @@ where
         })
 }
 
-fn define_variable<'a, P>(
+pub fn define_variable<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -281,7 +277,7 @@ where
         })
 }
 
-fn define_function<'a, P>(
+pub fn define_function<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -343,7 +339,7 @@ where
         })
 }
 
-fn define_map<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
+pub fn define_map<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone {
     text::keyword("defm")
         .padded()
         .ignore_then(identifier())
@@ -385,7 +381,7 @@ fn define_map<'a>() -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char
         })
 }
 
-fn define_protocol<'a, P>(
+pub fn define_protocol<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -445,7 +441,7 @@ where
             })
         })
 }
-fn anonymous_function<'a, P>(
+pub fn anonymous_function<'a, P>(
     expr: P,
 ) -> impl Parser<'a, &'a str, ParseExprKind, Err<Rich<'a, char>>> + Clone
 where
@@ -510,7 +506,6 @@ pub fn crisp_parser<'a>() -> impl Parser<'a, &'a str, Vec<ParseExpr>, Err<Rich<'
             float(),
             integer(),
             boolean(),
-            identifier_annotated(),
             identifier(),
             operator(),
         ))

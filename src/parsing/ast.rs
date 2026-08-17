@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use chumsky::span::SimpleSpan;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParseExpr {
     pub kind: ParseExprKind,
     pub span: SimpleSpan,
     pub id: Option<usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParseExprKind {
     Literal(Literal),
     Identifier(String),
@@ -79,7 +79,7 @@ pub enum Type {
     Custom(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Int32(i32),
     Int64(i64),
